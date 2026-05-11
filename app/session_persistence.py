@@ -10,7 +10,9 @@ import time
 # ----------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(BASE_DIR, "config.local.json")
+ROOT_DIR = os.path.dirname(BASE_DIR)
+CONFIG_DIR = os.path.join(ROOT_DIR, "config")
+CONFIG_PATH = os.path.join(CONFIG_DIR, "config.local.json")
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 
 load_dotenv(ENV_PATH)
