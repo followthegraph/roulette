@@ -1,12 +1,13 @@
 from flask import Flask, request, jsonify, render_template, redirect, session
 from flask_cors import CORS
+from dotenv import load_dotenv
 from werkzeug.middleware.proxy_fix import ProxyFix
-import pandas as pd
-import json
-import os
 from pathlib import Path
 from datetime import datetime, timezone
 import ipaddress
+import pandas as pd
+import json
+import os
 
 try:
     from zoneinfo import ZoneInfo
@@ -15,6 +16,16 @@ except Exception:
     TZ = None
 
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR.parent / ".env")
+ROOT_DIR = BASE_DIR.parent
+DATA_DIR = ROOT_DIR / "data"
+DATA_DIR.mkdir(exist_ok=True)
+STATS_CSV = DATA_DIR / "strategy_statistics_output.csv"
+STATS_ALL_CSV = DATA_DIR / "strategy_statistics_output_all.csv"
+ROULETTE_JSON = DATA_DIR / "roulette_data.json"
+ROULETTE_ALL_JSON = DATA_DIR / "roulette_data_all.json"
+server_name = os.environ.get("SERVER_NAME", "unknown")
+print(f"Starting server: {server_name}")
 app = Flask(__name__, template_folder=str(BASE_DIR / "templates"), static_folder=str(BASE_DIR / "static"))
 # Set a secret key for sessions (set via env var in production)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-me-in-prod")
@@ -171,53 +182,77 @@ def check_password():
 # --- Your existing data routes (kept) ---
 @app.route("/stats.json")
 def stats():
-    df = pd.read_csv(BASE_DIR / "strategy_statistics_output.csv")
+    if not STATS_CSV.exists():
+        return jsonify([])
+
+    df = pd.read_csv(STATS_CSV)
     df = df.fillna("")
     return jsonify(df.to_dict(orient="records"))
 
+
 @app.route("/roulette_data.json")
 def get_roulette_data():
-    data = json_read(BASE_DIR / "roulette_data.json")
+    if not ROULETTE_JSON.exists():
+        return jsonify([])
+
+    data = json_read(ROULETTE_JSON)
     return jsonify(data)
+
 
 @app.route("/stats_all.json")
 def stats_all():
+    if not ROULETTE_ALL_JSON.exists():
+        return jsonify([])
+
     from strategy_stats_generator import generate_strategy_stats
     generate_strategy_stats(
-        str(BASE_DIR / "roulette_data_all.json"),
-        str(BASE_DIR / "strategy_statistics_output_all.csv"),
+        str(ROULETTE_ALL_JSON),
+        str(STATS_ALL_CSV),
     )
-    df = pd.read_csv(BASE_DIR / "strategy_statistics_output_all.csv").fillna("")
+
+    if not STATS_ALL_CSV.exists():
+        return jsonify([])
+
+    df = pd.read_csv(STATS_ALL_CSV).fillna("")
     return jsonify(df.to_dict(orient="records"))
 
 @app.route("/data", methods=["POST"])
 def receive_data():
     try:
         new_data = request.json["data"]
-        dashboard_path = BASE_DIR / "roulette_data.json"
-        json_write(dashboard_path, new_data)
 
-        all_data_path = BASE_DIR / "roulette_data_all.json"
+        json_write(ROULETTE_JSON, new_data)
+
         try:
-            existing = json_read(all_data_path)
+            existing = json_read(ROULETTE_ALL_JSON)
         except FileNotFoundError:
             existing = new_data.copy()
-            json_write(all_data_path, existing)
+            json_write(ROULETTE_ALL_JSON, existing)
 
         newest_roll = new_data[0] if new_data else None
+
         if newest_roll and (not existing or newest_roll != existing[0]):
             updated = [newest_roll] + existing
-            json_write(all_data_path, updated)
+            json_write(ROULETTE_ALL_JSON, updated)
 
         from strategy_stats_generator import generate_strategy_stats
         generate_strategy_stats(
-            str(BASE_DIR / "roulette_data.json"),
-            str(BASE_DIR / "strategy_statistics_output.csv"),
+            str(ROULETTE_JSON),
+            str(STATS_CSV),
         )
 
         return jsonify({"status": "success", "message": "New roll added to ALL file."})
+
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/health")
+def health():
+    return jsonify({
+        "status": "ok",
+        "server": os.environ.get("SERVER_NAME", "unknown"),
+        "time": datetime.now(timezone.utc).isoformat()
+    })
 
 if __name__ == "__main__":
     host = os.environ.get("HOST", "0.0.0.0")
