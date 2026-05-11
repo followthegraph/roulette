@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Locked</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; overflow: hidden; }
+    #overlay {
+      position: fixed; inset: 0;
+      display: flex; align-items: flex-start; justify-content: center;
+      padding-top: 12vh;
+      background: rgba(0,0,0,0.35);
+      backdrop-filter: blur(2px);
+    }
+    #card {
+      background: #fff;
+      padding: 14px 16px;
+      border-radius: 12px;
+      box-shadow: 0 10px 34px rgba(0,0,0,0.28);
+      min-width: 280px;
+      max-width: min(92vw, 420px);
+    }
+    #card h1 { font-size: 18px; margin: 0 0 10px 0; }
+    input, button {
+      width: 100%; padding: 10px; font-size: 15px; border-radius: 8px; border: 1px solid #ccc;
+    }
+    button { margin-top: 10px; cursor: pointer; }
+    #msg { margin-top: 8px; color: #b00; min-height: 20px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <div id="card" role="dialog" aria-live="polite" aria-label="Enter password to view page">
+      <h1>Enter password to view page</h1>
+      <input id="pw" type="password" placeholder="Password" autocomplete="off">
+      <button id="go">Unlock</button>
+      <div id="msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const pw = document.getElementById('pw');
+    const btn = document.getElementById('go');
+    const msg = document.getElementById('msg');
+
+    async function check(p) {
+      try {
+        const res = await fetch('/check-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: p })
+        });
+        const data = await res.json();
+        if (data.blockedRedirect) {
+          window.location.href = data.blockedRedirect;
+          return;
+        }
+        if (data.ok) {
+          // Reload to fetch the real page (now authed via session)
+          window.location.reload();
+        } else {
+          msg.textContent = (data.message || 'Wrong password') + (data.attemptsLeft !== undefined ? ` — ${data.attemptsLeft} left` : '');
+        }
+      } catch (e) {
+        console.error(e);
+        msg.textContent = 'Server error — try again.';
+      }
+    }
+
+    btn.addEventListener('click', () => {
+      const v = pw.value.trim();
+      if (!v) { msg.textContent = 'Type the password'; return; }
+      check(v);
+    });
+    pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
+    pw.focus();
+  </script>
+</body>
+</html>

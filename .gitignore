@@ -1,0 +1,25 @@
+# Secrets
+.env
+config/config.local.json
+
+# Runtime data
+logs/
+data/*.json
+
+# Browser persistence
+user_profile/
+
+# Python embed
+python-embed/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS noise
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
