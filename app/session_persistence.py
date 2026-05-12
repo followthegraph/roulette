@@ -165,9 +165,14 @@ def open_last_500(game_frame):
 
 def inject_scraper(game_frame):
     print("Injecting scraper...")
+    ingest_endpoint = config["ingest_endpoint"]
+    ingest_key = os.getenv("INGEST_KEY", "")
 
     with open(SCRAPER_PATH, "r", encoding="utf-8") as f:
         scraper_js = f.read()
+
+    scraper_js = scraper_js.replace("__INGEST_ENDPOINT__", ingest_endpoint)
+    scraper_js = scraper_js.replace("__INGEST_KEY__", ingest_key)
 
     game_frame.evaluate(scraper_js)
 

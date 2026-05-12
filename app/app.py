@@ -26,7 +26,10 @@ ROULETTE_JSON = DATA_DIR / "roulette_data.json"
 ROULETTE_ALL_JSON = DATA_DIR / "roulette_data_all.json"
 server_name = os.environ.get("SERVER_NAME", "unknown")
 print(f"Starting server: {server_name}")
-app = Flask(__name__, template_folder=str(BASE_DIR / "templates"), static_folder=str(BASE_DIR / "static"))
+app = Flask(
+    __name__,
+    template_folder=os.path.join(ROOT_DIR, "templates")
+)
 # Set a secret key for sessions (set via env var in production)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-me-in-prod")
 CORS(app)

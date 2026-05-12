@@ -1,8 +1,9 @@
 (() => {
-  const ENDPOINT = "https://ingest.getdatbp.com/data";
+  const ENDPOINT = "__INGEST_ENDPOINT__";
+  const INGEST_KEY = "__INGEST_KEY__";
   const headers = {
     "Content-Type": "application/json",
-    "X-Ingest-Key": "local-only-secret"
+    "X-Ingest-Key": INGEST_KEY
   };
 
   const INTERVAL_MS = 1000;
