@@ -1453,7 +1453,13 @@ function buildUrgencyCandidates(dataRows) {
     if (String(row['BetType'] || '').includes('Double') || String(row['BetType'] || '').includes('Quad')) return;
     const coverage = getCoverageSizeForStrategy(name);
     if (!coverage) return;
-    const isPreferred = preferred.has(name) || String(row['BetType']) === 'Outside' || name.includes('Street') || name.includes('Line');
+    const isCrossfire = name.startsWith('Crossfire,');
+    const isPreferred =
+    preferred.has(name) ||
+    isCrossfire ||
+    String(row['BetType']) === 'Outside' ||
+    name.includes('Street') ||
+    name.includes('Line');
     if (!isPreferred) return;
     const rollsSince = Number(row['Rolls Since Last Hit']);
     const maxDelay = Number(row['Max Delay']);
