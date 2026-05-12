@@ -4,6 +4,7 @@ config/config.local.json
 
 # Runtime data
 logs/
+data/*.csv
 data/*.json
 
 # Browser persistence
