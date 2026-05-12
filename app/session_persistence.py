@@ -168,6 +168,7 @@ def open_last_500(game_frame):
 
 def inject_scraper(game_frame):
     print("Injecting scraper...")
+
     ingest_endpoint = config["ingest_endpoint"]
     ingest_key = os.getenv("INGEST_KEY", "")
 
@@ -180,27 +181,6 @@ def inject_scraper(game_frame):
     game_frame.evaluate(scraper_js)
 
     print("Scraper started.")
-
-    print("Running. Press CTRL+C to stop.")
-
-    last_refresh = time.time()
-
-    while True:
-        time.sleep(5)
-
-        if STATS_REFRESH_MODE == "reopen_last_500":
-            if time.time() - last_refresh >= STATS_REFRESH_INTERVAL_SECONDS:
-                last_refresh = time.time()
-
-                try:
-                    if not stats_visible(game_frame):
-                        print("Stats lost focus. Reopening Statistics -> Last 500...")
-                        open_last_500(game_frame)
-                        inject_scraper(game_frame)
-                    else:
-                        print("Stats still visible.")
-                except Exception as e:
-                    print(f"Watchdog failed to refresh stats: {e}")
 
 def stats_visible(game_frame):
     try:
@@ -245,5 +225,24 @@ with sync_playwright() as p:
 
     print("Running. Press CTRL+C to stop.")
 
+    last_refresh = time.time()
+
     while True:
-        time.sleep(10)
+        time.sleep(5)
+
+        if STATS_REFRESH_MODE == "reopen_last_500":
+            if time.time() - last_refresh >= STATS_REFRESH_INTERVAL_SECONDS:
+                last_refresh = time.time()
+
+                try:
+                    if not stats_visible(game_frame):
+                        print("Stats lost focus. Reopening Statistics -> Last 500...")
+
+                        open_last_500(game_frame)
+                        inject_scraper(game_frame)
+
+                    else:
+                        print("Stats still visible.")
+
+                except Exception as e:
+                    print(f"Watchdog failed to refresh stats: {e}")
