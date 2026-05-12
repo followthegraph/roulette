@@ -27,6 +27,9 @@ SCRAPER_PATH = config["scraper_path"]
 ROULETTE_USER = os.getenv("ROULETTE_USER")
 ROULETTE_PASS = os.getenv("ROULETTE_PASS")
 
+WHEEL_TYPE = config.get("wheel_type", "standard")
+STATS_REFRESH_MODE = config.get("stats_refresh_mode", "normal")
+STATS_REFRESH_INTERVAL_SECONDS = int(config.get("stats_refresh_interval_seconds", 30))
 
 # ----------------------------
 # Selectors
@@ -177,6 +180,36 @@ def inject_scraper(game_frame):
     game_frame.evaluate(scraper_js)
 
     print("Scraper started.")
+
+    print("Running. Press CTRL+C to stop.")
+
+    last_refresh = time.time()
+
+    while True:
+        time.sleep(5)
+
+        if STATS_REFRESH_MODE == "reopen_last_500":
+            if time.time() - last_refresh >= STATS_REFRESH_INTERVAL_SECONDS:
+                last_refresh = time.time()
+
+                try:
+                    if not stats_visible(game_frame):
+                        print("Stats lost focus. Reopening Statistics -> Last 500...")
+                        open_last_500(game_frame)
+                        inject_scraper(game_frame)
+                    else:
+                        print("Stats still visible.")
+                except Exception as e:
+                    print(f"Watchdog failed to refresh stats: {e}")
+
+def stats_visible(game_frame):
+    try:
+        count = game_frame.locator(STATS_ITEM_SELECTOR).count()
+        return count >= 100
+    except Exception:
+        return False
+    
+    
 
 
 # ----------------------------

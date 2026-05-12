@@ -1,0 +1,15 @@
+{
+    "server_name": "",
+    "profile_dir": "C:/Roll/user_profile",
+    "url": "",
+    "scraper_path": "C:/Roll/app/extractor.js",
+    "flask_host": "0.0.0.0",
+    "flask_port": "",
+    "cloudflare_hostname": "",
+    "cloudflare_tunnel_name": "",
+    "cloudflare_config_path": "",
+    "ingest_endpoint": "",
+    "wheel_type": "standard",
+    "stats_refresh_mode": "normal",
+    "stats_refresh_interval_seconds": 30
+  }
