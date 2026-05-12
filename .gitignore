@@ -6,6 +6,7 @@ config/config.local.json
 logs/
 data/*.csv
 data/*.json
+bias_by_number_output.csv
 
 # Browser persistence
 user_profile/
