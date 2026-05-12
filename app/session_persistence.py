@@ -11,11 +11,15 @@ import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
-CONFIG_DIR = os.path.join(ROOT_DIR, "config")
-CONFIG_PATH = os.path.join(CONFIG_DIR, "config.local.json")
-ENV_PATH = os.path.join(BASE_DIR, ".env")
 
-load_dotenv(ENV_PATH)
+CONFIG_PATH = os.path.join(ROOT_DIR, "config", "config.local.json")
+ENV_PATH = os.path.join(ROOT_DIR, ".env")
+
+load_dotenv(ENV_PATH, override=True)
+
+print("ENV_PATH:", ENV_PATH)
+print("ROULETTE_USER present:", bool(os.getenv("ROULETTE_USER")))
+print("ROULETTE_PASS present:", bool(os.getenv("ROULETTE_PASS")))
 
 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
     config = json.load(f)
