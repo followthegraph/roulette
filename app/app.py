@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from werkzeug.middleware.proxy_fix import ProxyFix
 from pathlib import Path
 from datetime import datetime, timezone
+import requests
 import ipaddress
 import pandas as pd
 import json
@@ -16,7 +17,6 @@ except Exception:
     TZ = None
 
 BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR.parent / ".env")
 ROOT_DIR = BASE_DIR.parent
 DATA_DIR = ROOT_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -24,7 +24,22 @@ STATS_CSV = DATA_DIR / "strategy_statistics_output.csv"
 STATS_ALL_CSV = DATA_DIR / "strategy_statistics_output_all.csv"
 ROULETTE_JSON = DATA_DIR / "roulette_data.json"
 ROULETTE_ALL_JSON = DATA_DIR / "roulette_data_all.json"
+CONFIG_PATH = ROOT_DIR / "config" / "config.local.json"
+ENV_PATH = ROOT_DIR / ".env"
+
+load_dotenv(ENV_PATH, override=True)
+
 server_name = os.environ.get("SERVER_NAME", "unknown")
+
+config = {}
+if CONFIG_PATH.exists():
+    with CONFIG_PATH.open("r", encoding="utf-8") as f:
+        config = json.load(f)
+
+WHEEL_ID = config.get("wheel_id", os.getenv("SERVER_NAME", "unknown-wheel"))
+GLOBAL_INGEST_ENABLED = bool(config.get("global_ingest_enabled", False))
+GLOBAL_INGEST_URL = config.get("global_ingest_url")
+
 print(f"Starting server: {server_name}")
 app = Flask(
     __name__,
@@ -69,6 +84,30 @@ REDIRECT_URL = "https://www.google.com/search?q=colostomy+bags"
 DEV_IGNORE_PRIVATE_IPS = False  # don't blacklist loopback/private in dev
 
 # --- IP helpers ---
+def sync_to_global_collector(rolls):
+    if not GLOBAL_INGEST_ENABLED or not GLOBAL_INGEST_URL:
+        return
+
+    try:
+        payload = {
+            "wheel_id": WHEEL_ID,
+            "rolls": rolls
+        }
+
+        response = requests.post(
+            GLOBAL_INGEST_URL,
+            json=payload,
+            timeout=5
+        )
+
+        if response.status_code >= 400:
+            print(f"[GLOBAL SYNC] Failed: {response.status_code} {response.text}")
+        else:
+            print(f"[GLOBAL SYNC] OK: {response.text}")
+
+    except Exception as e:
+        print(f"[GLOBAL SYNC] Error: {e}")
+
 def _first_public_from_xff(header_value: str):
     if not header_value:
         return None
@@ -243,6 +282,8 @@ def receive_data():
             str(ROULETTE_JSON),
             str(STATS_CSV),
         )
+
+        sync_to_global_collector(new_data)
 
         return jsonify({"status": "success", "message": "New roll added to ALL file."})
 
