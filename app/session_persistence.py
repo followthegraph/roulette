@@ -225,7 +225,7 @@ with sync_playwright() as p:
     print("Using game frame:", game_frame.url)
 
     open_last_500(game_frame)
-    print("Stats reopened. Existing scraper timer should continue.")
+    inject_scraper(game_frame)
 
     print("Running. Press CTRL+C to stop.")
 
@@ -241,9 +241,8 @@ with sync_playwright() as p:
                 try:
                     if not stats_visible(game_frame):
                         print("Stats lost focus. Reopening Statistics -> Last 500...")
-
                         open_last_500(game_frame)
-                        inject_scraper(game_frame)
+                        print("Stats reopened. Existing scraper timer should continue.")
 
                     else:
                         print("Stats still visible.")
