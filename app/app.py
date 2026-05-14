@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from werkzeug.middleware.proxy_fix import ProxyFix
 from pathlib import Path
 from datetime import datetime, timezone
+import threading
 import requests
 import ipaddress
 import pandas as pd
@@ -16,6 +17,7 @@ try:
 except Exception:
     TZ = None
 
+DATA_LOCK = threading.Lock()
 BASE_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BASE_DIR.parent
 DATA_DIR = ROOT_DIR / "data"
@@ -258,37 +260,43 @@ def stats_all():
     df = pd.read_csv(STATS_ALL_CSV).fillna("")
     return jsonify(df.to_dict(orient="records"))
 
-@app.route("/data", methods=["POST"])
+@app.route("/data", methods=["POST", "OPTIONS"])
 def receive_data():
-    try:
-        new_data = request.json["data"]
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200
 
-        json_write(ROULETTE_JSON, new_data)
-
+    with DATA_LOCK:
         try:
-            existing = json_read(ROULETTE_ALL_JSON)
-        except FileNotFoundError:
-            existing = new_data.copy()
-            json_write(ROULETTE_ALL_JSON, existing)
+            new_data = request.json["data"]
 
-        newest_roll = new_data[0] if new_data else None
+            json_write(ROULETTE_JSON, new_data)
 
-        if newest_roll and (not existing or newest_roll != existing[0]):
-            updated = [newest_roll] + existing
-            json_write(ROULETTE_ALL_JSON, updated)
+            try:
+                existing = json_read(ROULETTE_ALL_JSON)
+            except FileNotFoundError:
+                existing = new_data.copy()
+                json_write(ROULETTE_ALL_JSON, existing)
 
-        from strategy_stats_generator import generate_strategy_stats
-        generate_strategy_stats(
-            str(ROULETTE_JSON),
-            str(STATS_CSV),
-        )
+            newest_roll = new_data[0] if new_data else None
 
-        sync_to_global_collector(new_data)
+            if newest_roll and (not existing or newest_roll != existing[0]):
+                updated = [newest_roll] + existing
+                json_write(ROULETTE_ALL_JSON, updated)
 
-        return jsonify({"status": "success", "message": "New roll added to ALL file."})
+            from strategy_stats_generator import generate_strategy_stats
+            generate_strategy_stats(
+                str(ROULETTE_JSON),
+                str(STATS_CSV),
+            )
 
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+            sync_to_global_collector(new_data)
+
+            return jsonify({"status": "success", "message": "Data processed."})
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/health")
 def health():

@@ -225,7 +225,7 @@ with sync_playwright() as p:
     print("Using game frame:", game_frame.url)
 
     open_last_500(game_frame)
-    inject_scraper(game_frame)
+    print("Stats reopened. Existing scraper timer should continue.")
 
     print("Running. Press CTRL+C to stop.")
 
