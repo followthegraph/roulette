@@ -8,6 +8,7 @@ logs/
 data/*.csv
 data/*.json
 bias_by_number_output.csv
+scripts/legacy
 
 # Browser persistence
 user_profile/

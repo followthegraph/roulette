@@ -1,3 +1,3 @@
-taskkill /IM python.exe /F
-taskkill /IM chrome.exe /F
-taskkill /IM chromium.exe /F
+@echo off
+powershell.exe -ExecutionPolicy Bypass -File "%~dp0kill_processes.ps1"
+pause

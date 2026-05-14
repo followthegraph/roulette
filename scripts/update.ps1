@@ -1,0 +1,1 @@
+& "$PSScriptRoot\roulette.ps1" -Action update
