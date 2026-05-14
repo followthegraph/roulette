@@ -21,8 +21,12 @@ Write-Host "Pulling latest code..."
 git pull
 
 Write-Host "Stopping existing processes..."
-taskkill /IM python.exe /F 2>$null
-taskkill /IM cloudflared.exe /F 2>$null
+
+Get-Process python -ErrorAction SilentlyContinue |
+    Stop-Process -Force -ErrorAction SilentlyContinue
+
+Get-Process cloudflared -ErrorAction SilentlyContinue |
+    Stop-Process -Force -ErrorAction SilentlyContinue
 
 Start-Sleep -Seconds 3
 
