@@ -1011,7 +1011,7 @@ async function refreshGlobalMonitor() {
   if (!el) return;
 
   try {
-    const res = await fetch(`/global-monitor?t=${Date.now()}`);
+    const res = await fetch(`https://eu.getdatbp.com/global-monitor?t=${Date.now()}`);
     const rows = await res.json();
 
     el.innerHTML = rows
