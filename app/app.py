@@ -405,6 +405,48 @@ def global_monitor():
 
     return jsonify(results)
 
+@app.route("/global-roll-timing")
+def global_roll_timing():
+
+    rows = global_db_rows("""
+
+        WITH ordered AS (
+            SELECT
+                wheel_id,
+                seq,
+                created_at_utc,
+                LAG(created_at_utc) OVER (
+                    PARTITION BY wheel_id
+                    ORDER BY seq
+                ) AS prev_created
+            FROM wheel_rolls
+        )
+
+        SELECT
+            wheel_id,
+            ROUND(AVG(
+                (
+                    julianday(created_at_utc) -
+                    julianday(prev_created)
+                ) * 86400.0
+            ), 2) AS avg_gap_seconds,
+
+            ROUND(MAX(
+                (
+                    julianday(created_at_utc) -
+                    julianday(prev_created)
+                ) * 86400.0
+            ), 2) AS max_gap_seconds
+
+        FROM ordered
+        WHERE prev_created IS NOT NULL
+        GROUP BY wheel_id
+        ORDER BY wheel_id
+
+    """)
+
+    return jsonify(rows)
+
 @app.route("/health")
 def health():
     return jsonify({
