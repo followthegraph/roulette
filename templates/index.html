@@ -30,11 +30,7 @@
       padding: 6px 0;
       box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     }
-    td.bias-score {
-      white-space: nowrap;
-      min-width: 90px;
-      text-align: center;
-    }
+
 
     body { font-family: sans-serif; margin: 20px; font-size: 13px; }
     h1 { font-size: 18px; }
@@ -136,16 +132,18 @@
         <option value="stats_all.json">All Data</option>
       </select>
     </div>
-    <div class="filters">
-      <label>Filter by Strategy (multi):</label>
-      <input type="text" id="strategyFilter" placeholder="Type to filter...">
-      <br>
-      <label>Filter by Bet Signal (multi):</label>
-      <select id="signalFilter" multiple size="3">
-        <option value>-- Clear All --</option>
-        <option value="? Consider betting">? Consider betting</option>
-        <option value="? Wait">? Wait</option>
-      </select>
+    <div class="filters" style="display:flex; gap:12px; align-items:end; flex-wrap:wrap; margin-bottom:12px;">
+      <div>
+        <label for="maxDelayPctFilter"><b>Show strategies near max delay:</b></label><br>
+        <select id="maxDelayPctFilter" style="width:160px;">
+          <option value="0">Show All</option>
+          <option value="50">50%+</option>
+          <option value="65">65%+</option>
+          <option value="75" selected>75%+</option>
+          <option value="90">90%+</option>
+          <option value="100">At / Past Max</option>
+        </select>
+      </div>
     </div>
 
     <div class="highlight-toggle" style="display:none;">
@@ -216,8 +214,6 @@
             <th>Max Delay</th>
             <th>Bet Signal</th>
             <th>Martingale Risk</th>
-            <th>Bias Score<br><small>(100 | 500)</small></th>
-            <th>Bias Classification</th>
           </tr>
         </thead>
         <tbody>
@@ -254,8 +250,6 @@
                   <th onclick="sortTable('otherTable', 3, true)">Max Delay</th>
                   <th onclick="sortTable('otherTable', 4)">Bet Signal</th>
                   <th onclick="sortTable('otherTable', 5, true)">Martingale Risk</th>
-                  <th onclick="sortTable('otherTable', 6, true)">Bias Score<br><small>(100 | 500)</small></th>
-                  <th onclick="sortTable('otherTable', 7)">Bias Classification</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -273,8 +267,6 @@
                   <th onclick="sortTable('crossfireTable', 3, true)">Max Delay</th>
                   <th onclick="sortTable('crossfireTable', 4)">Bet Signal</th>
                   <th onclick="sortTable('crossfireTable', 5, true)">Martingale Risk</th>
-                  <th onclick="sortTable('crossfireTable', 6, true)">Bias Score<br><small>(100 | 500)</small></th>
-                  <th onclick="sortTable('crossfireTable', 7)">Bias Classification</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -292,8 +284,6 @@
                   <th onclick="sortTable('generalTable', 3, true)">Max Delay</th>
                   <th onclick="sortTable('generalTable', 4)">Bet Signal</th>
                   <th onclick="sortTable('generalTable', 5, true)">Martingale Risk</th>
-                  <th onclick="sortTable('generalTable', 6, true)">Bias Score<br><small>(100 | 500)</small></th>
-                  <th onclick="sortTable('generalTable', 7)">Bias Classification</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -312,8 +302,6 @@
                   <th onclick="sortTable('altTable', 4, true)">Max Delay</th>
                   <th onclick="sortTable('altTable', 5)">Bet Signal</th>
                   <th onclick="sortTable('altTable', 6, true)">Martingale Risk</th>
-                  <th onclick="sortTable('altTable', 7, true)">Bias Score</th>
-                  <th onclick="sortTable('altTable', 8)">Bias Classification</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -331,8 +319,6 @@
                   <th onclick="sortTable('frenchTable', 3, true)">Max Delay</th>
                   <th onclick="sortTable('frenchTable', 4)">Bet Signal</th>
                   <th onclick="sortTable('frenchTable', 5, true)">Martingale Risk</th>
-                  <th onclick="sortTable('frenchTable', 6, true)">Bias Score<br><small>(100 | 500)</small></th>
-                  <th onclick="sortTable('frenchTable', 7)">Bias Classification</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -350,8 +336,6 @@
                   <th onclick="sortTable('frenchTable', 3, true)">Max Delay</th>
                   <th onclick="sortTable('frenchTable', 4)">Bet Signal</th>
                   <th onclick="sortTable('frenchTable', 5, true)">Martingale Risk</th>
-                  <th onclick="sortTable('frenchTable', 6, true)">Bias Score<br><small>(100 | 500)</small></th>
-                  <th onclick="sortTable('frenchTable', 7)">Bias Classification</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -369,8 +353,7 @@
                   <th onclick="sortTable('streetTable', 3, true)">Max Delay</th>
                   <th onclick="sortTable('streetTable', 4)">Bet Signal</th>
                   <th onclick="sortTable('streetTable', 5, true)">Martingale Risk</th>
-                  <th onclick="sortTable('streetTable', 6, true)">Bias Score<br><small>(100 | 500)</small></th>
-                  <th onclick="sortTable('streetTable', 7)">Bias Classification</th>
+
                 </tr>
               </thead>
               <tbody></tbody>
@@ -388,8 +371,6 @@
                   <th onclick="sortTable('lineTable', 3, true)">Max Delay</th>
                   <th onclick="sortTable('lineTable', 4)">Bet Signal</th>
                   <th onclick="sortTable('lineTable', 5, true)">Martingale Risk</th>
-                  <th onclick="sortTable('lineTable', 6, true)">Bias Score<br><small>(100 | 500)</small></th>
-                  <th onclick="sortTable('lineTable', 7)">Bias Classification</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -408,8 +389,7 @@
                   <th onclick="sortTable('quadTable', 4, true)">Max Delay</th>
                   <th onclick="sortTable('quadTable', 5)">Bet Signal</th>
                   <th onclick="sortTable('quadTable', 6, true)">Martingale Risk</th>
-                  <th onclick="sortTable('quadTable', 7, true)">Bias Score</th>
-                  <th onclick="sortTable('quadTable', 8)">Bias Classification</th>
+                
                 </tr>
               </thead>
               <tbody></tbody>
@@ -797,41 +777,6 @@ setTimeout(() => {
 
 
         //
-        const biasTd = document.createElement("td");
-        biasTd.textContent = row["Bias Score"] ?? "";
-        biasTd.classList.add("bias-score");
-        const value = String(row["Bias Score"] ?? "");
-        const [score100Str, score500Str] = value.split("|").map(p => p.trim());
-
-        const score100 = parseFloat(score100Str);
-        const score500 = parseFloat(score500Str);
-
-        const span100 = document.createElement("span");
-        span100.textContent = score100Str;
-        span100.style.color = score100 > 0 ? "green" : (score100 < 0 ? "red" : "#333");
-
-        const span500 = document.createElement("span");
-        span500.textContent = score500Str;
-        span500.style.color = score500 > 0 ? "green" : (score500 < 0 ? "red" : "#333");
-
-        biasTd.innerHTML = ''; // Clear it
-        biasTd.appendChild(span100);
-        biasTd.innerHTML += " | ";
-        biasTd.appendChild(span500);
-
-        tr.appendChild(biasTd);
-
-
-        const biasClassTd = document.createElement("td");
-        biasClassTd.textContent = row["Bias Classification"] ?? "";
-
-        // Optional: add color class
-        const val = biasClassTd.textContent.toLowerCase();
-        if (val.includes("| +")) biasClassTd.style.backgroundColor = "#c8facc";
-        else if (val.includes("| -")) biasClassTd.style.backgroundColor = "#fdd";
-        else biasClassTd.style.backgroundColor = "#eee";
-
-        tr.appendChild(biasClassTd);
 
 //
 // after tr is built and all tds added...
@@ -1258,12 +1203,6 @@ function getNeighborsNumbers(centerNumber, neighborCount) {
   return result;
 }
 
-function classifyBias(score) {
-  if (score > 0.1) return '+';
-  if (score < -0.1) return '-';
-  return '0';
-}
-
 function calculateDynamicMartingaleRisk(rollsSince, maxDelay, selectionSize) {
   const rs = Number(rollsSince);
   const md = Number(maxDelay);
@@ -1292,8 +1231,6 @@ function computeNeighborsStats(rolls, numbers, strategyLabel) {
       maxDelay: '',
       betSignal: '',
       martingaleRisk: '',
-      biasScore: '',
-      biasClassification: '',
     };
   }
 
@@ -1313,30 +1250,6 @@ function computeNeighborsStats(rolls, numbers, strategyLabel) {
   const maxDelay = delays.length ? Math.max(...delays) : '';
   const betSignal = (rollsSince !== '' && avgDelay !== '') ? (rollsSince >= avgDelay ? '? Consider betting' : '? Wait') : '';
 
-  const computeBiasMap = (targetRolls) => {
-    const counts = {};
-    for (let i = 0; i <= 36; i++) counts[i] = 0;
-    targetRolls.forEach(num => { counts[num] = (counts[num] || 0) + 1; });
-    const expected = targetRolls.length / 37;
-    const out = {};
-    for (let i = 0; i <= 36; i++) {
-      out[i] = expected ? (counts[i] - expected) / expected : 0;
-    }
-    return out;
-  };
-
-  const bias500Map = computeBiasMap(parsedRolls);
-  const bias100Map = computeBiasMap(parsedRolls.slice(0, 100));
-  const avgBias = (biasMap) => numbers.length
-    ? Number((numbers.reduce((sum, num) => sum + (biasMap[num] || 0), 0) / numbers.length).toFixed(2))
-    : 0;
-
-  const bias100 = avgBias(bias100Map);
-  const bias500 = avgBias(bias500Map);
-  const biasScore = `${bias100} | ${bias500}`;
-  const biasClassification = `${classifyBias(bias100)} | ${classifyBias(bias500)}`;
-  const martingaleRisk = calculateDynamicMartingaleRisk(rollsSince, maxDelay, numbers.length);
-
   return {
     strategy: strategyLabel,
     rollsSince,
@@ -1344,8 +1257,6 @@ function computeNeighborsStats(rolls, numbers, strategyLabel) {
     maxDelay,
     betSignal,
     martingaleRisk,
-    biasScore,
-    biasClassification,
   };
 }
 
@@ -2193,8 +2104,6 @@ function updateNeighborsPanel(rolls) {
     stats.maxDelay,
     stats.betSignal,
     stats.martingaleRisk,
-    stats.biasScore,
-    stats.biasClassification,
   ];
 
   cells.forEach((value, index) => {
