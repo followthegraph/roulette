@@ -109,9 +109,8 @@
 </style>
   </head>
   <body>
-    <audio id="dingSound" src="https://www.soundjay.com/button/button-3.mp3" preload="auto"></audio>
     <h1>Roulette Strategy Dashboard</h1>
-    <div id="urgencyOverlay" style="position: fixed; top: 12px; right: 12px; width: 360px; max-width: calc(100vw - 24px); z-index: 1001; background: rgba(255,255,255,0.65); backdrop-filter: blur(8px); border: 1px solid rgba(0,0,0,0.14); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); overflow: hidden; transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;">
+    <div id="globalHealthBanner" style="display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 16px 0;"></div><div id="urgencyOverlay" style="position: fixed; top: 12px; right: 12px; width: 360px; max-width: calc(100vw - 24px); z-index: 1001; background: rgba(255,255,255,0.65); backdrop-filter: blur(8px); border: 1px solid rgba(0,0,0,0.14); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); overflow: hidden; transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;">
       <div id="urgencyOverlayHeader" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; background: rgba(17,24,39,0.55); color:#fff; transition: background 0.2s ease;">
         <div>
           <div style="font-weight:bold;">Urgency Monitor</div>
@@ -1007,8 +1006,41 @@ setInterval(() => {
   refreshGlobalMonitor();
 }, GLOBAL_MONITOR_POLL_MS);
 
-fetchData();
+async function refreshGlobalMonitor() {
+  const el = document.getElementById("globalHealthBanner");
+  if (!el) return;
+
+  try {
+    const res = await fetch(`/global-monitor?t=${Date.now()}`);
+    const rows = await res.json();
+
+    el.innerHTML = rows
+      .filter(r => r.wheel_id !== "local-dev")
+      .map(r => {
+        const color =
+          r.status === "OK" ? "#d4edda" :
+          r.status === "WARNING" ? "#fff3cd" :
+          r.status === "STALE" ? "#ffe0b2" :
+          "#f8d7da";
+
+        return `
+          <div style="padding:8px 10px; border-radius:8px; background:${color}; border:1px solid rgba(0,0,0,.15); min-width:160px;">
+            <b>${r.wheel_id}</b><br>
+            Status: ${r.status}<br>
+            Last write: ${Number(r.stale_minutes).toFixed(1)} min ago
+            Seq: ${r.latest_seq}
+          </div>
+        `;
+      }).join("");
+
+  } catch (err) {
+    el.innerHTML = `<div style="padding:8px 10px; background:#f8d7da; border-radius:8px;">Global monitor unavailable</div>`;
+  }
+}
+
 refreshGlobalMonitor();
+fetchData();
+
 //
 // function getPreferredGroup(csvData) {
 //   const groupA = ["'1st & 12", "'2nd & 12", "'3rd & 12"];
