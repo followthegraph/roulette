@@ -992,15 +992,23 @@ function flashTableHeaders() {
   });
 }
 
-// Auto-refresh data every 6 seconds
+const DASHBOARD_POLL_MS = 2000;
+const GLOBAL_MONITOR_POLL_MS = 30000;
+
+// main dashboard refresh
 setInterval(() => {
   console.log("🔄 Auto-refreshing dashboard data...");
   fetchData();
   flashTableHeaders();
-}, 2000);
+}, DASHBOARD_POLL_MS);
+
+// global monitor refresh
+setInterval(() => {
+  refreshGlobalMonitor();
+}, GLOBAL_MONITOR_POLL_MS);
 
 fetchData();
-
+refreshGlobalMonitor();
 //
 // function getPreferredGroup(csvData) {
 //   const groupA = ["'1st & 12", "'2nd & 12", "'3rd & 12"];
