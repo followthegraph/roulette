@@ -85,22 +85,21 @@
     .green { background-color: green; }
   .gold-border { border: 2px solid #ff69b4 !important; }
 
-.heat-box {
-  padding: 5px 8px;
-  border-radius: 4px;
-  min-width: 22px;
-  text-align: center;
-  font-weight: bold;
-  color: #fff;
+  .heat-box {
+    padding: 5px 8px;
+    border-radius: 4px;
+    min-width: 22px;
+    text-align: center;
+    font-weight: bold;
+    color: #fff;
+    transition: background-color 0.3s ease;
+  }
 
-  transition: background-color 0.3s ease;
-
-
-.dark-red {
-  background-color: #8B0000 !important;
-  color: white;
-  font-weight: bold;
-}
+  .dark-red {
+    background-color: #8B0000 !important;
+    color: white;
+    font-weight: bold;
+  }
 
 </style>
   </head>
@@ -505,7 +504,6 @@ let allData = [];
 
       const rolls = await fetch(`/roulette_data.json?t=${timestamp}`).then(r => r.json());
       window.latestRolls = rolls;
-      updateTopStreetsTicker(allData);
 
       document.getElementById("lastUpdated").innerText =
         "Last updated: " + new Date().toLocaleTimeString();
@@ -628,21 +626,6 @@ setTimeout(() => {
 }
 
     function renderTables(initial = false) {
-      const strategyFilter = document.getElementById("strategyFilter").value.toLowerCase();
-      const selectedSignals = Array.from(document.getElementById("signalFilter").selectedOptions)
-        .map(opt => opt.value).filter(v => v !== "");
-
-      // const genTable = document.querySelector("#generalTable tbody");
-      // const altTable = document.querySelector("#altTable tbody");
-      // const quadTable = document.querySelector("#quadTable tbody");
-      // genTable.innerHTML = "";
-      // altTable.innerHTML = "";
-      // quadTable.innerHTML = "";
-
-      // const generalRows = [];
-      // const altRows = [];
-      // const quadRows = [];
-
       const frenchTable = document.querySelector('#frenchTable tbody');
       const streetTable = document.querySelector('#streetTable tbody');
       const lineTable = document.querySelector('#lineTable tbody');
@@ -679,9 +662,16 @@ setTimeout(() => {
           strategy.includes("/")
         ) return;
 
-        if (strategyFilter && !strategy.toLowerCase().includes(strategyFilter)) return;
-        if (selectedSignals.length > 0 && !selectedSignals.includes(signal)) return;
+        const pctFilter = Number(document.getElementById("maxDelayPctFilter")?.value || 0);
+        const rollsSince = Number(row["Rolls Since Last Hit"]);
+        const maxDelay = Number(row["Max Delay"]);
 
+        if (pctFilter > 0) {
+          if (!Number.isFinite(rollsSince) || !Number.isFinite(maxDelay) || maxDelay <= 0) return;
+
+          const pctOfMax = (rollsSince / maxDelay) * 100;
+          if (pctOfMax < pctFilter) return;
+        }
         const tr = document.createElement("tr");
         const keys = (row["BetType"] === "General" || row["BetType"] === "Outside")
           ? ["Betting Strategy", "Rolls Since Last Hit", "Avg Delay", "Max Delay", "Bet Signal"]
@@ -831,7 +821,7 @@ setTimeout(() => {
         const numbers = generalBets[baseName];
         if (!numbers) return;
 
-        document.querySelectorAll('.heat-box').forEach(box => {
+        document.querySelectorAll('#heatmap .heat-box').forEach(box => {
           const num = parseInt(box.innerText);
           if (numbers.includes(num)) {
             box.style.opacity = '1';
@@ -844,7 +834,7 @@ setTimeout(() => {
       }
 
       function highlightSpecificNumbers(numbers) {
-        document.querySelectorAll('.heat-box').forEach(box => {
+        document.querySelectorAll('#heatmap .heat-box').forEach(box => {
           const num = parseInt(box.innerText);
           if (numbers.includes(num)) {
             box.style.opacity = '1';
@@ -858,11 +848,13 @@ setTimeout(() => {
 
 
       function resetHeatboxStyles() {
-        document.querySelectorAll('.heat-box').forEach(box => {
+        document.querySelectorAll('#heatmap .heat-box').forEach(box => {
           box.style.opacity = '1';
           box.style.border = '1px solid #444';
         });
       }
+      document.getElementById("maxDelayPctFilter")
+  .addEventListener("change", () => renderTables(false));
       document.addEventListener("mousedown", function (e) {
       if (e.target.tagName === "TD" && e.target.cellIndex === 0) {
         const strategyText = e.target.textContent.trim();
@@ -921,8 +913,6 @@ setTimeout(() => {
       table.dataset.sortAsc = ascending.toString();
     }
 
-    document.getElementById("strategyFilter").addEventListener("input", () => renderTables(false));
-    document.getElementById("signalFilter").addEventListener("change", () => renderTables(false));
     document.getElementById("highlightToggle").addEventListener("change", () => {
       fetchData();
 });
@@ -936,7 +926,7 @@ function flashTableHeaders() {
   });
 }
 
-const DASHBOARD_POLL_MS = 2000;
+const DASHBOARD_POLL_MS = 5000;
 const GLOBAL_MONITOR_POLL_MS = 30000;
 
 // main dashboard refresh
