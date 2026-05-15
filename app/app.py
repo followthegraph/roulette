@@ -28,6 +28,7 @@ ROULETTE_JSON = DATA_DIR / "roulette_data.json"
 ROULETTE_ALL_JSON = DATA_DIR / "roulette_data_all.json"
 CONFIG_PATH = ROOT_DIR / "config" / "config.local.json"
 ENV_PATH = ROOT_DIR / ".env"
+GLOBAL_DB_PATH = ROOT_DIR / "global" / "global_rolls.sqlite"
 
 load_dotenv(ENV_PATH, override=True)
 
@@ -178,6 +179,22 @@ def json_write(path: Path, data):
     with path.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
+def global_db_rows(query, params=()):
+    import sqlite3
+
+    if not GLOBAL_DB_PATH.exists():
+        return []
+
+    conn = sqlite3.connect(GLOBAL_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute(query, params)
+    rows = [dict(row) for row in cur.fetchall()]
+
+    conn.close()
+    return rows
+
 # --- Routes ---
 @app.route("/")
 def index():
@@ -297,6 +314,45 @@ def receive_data():
             import traceback
             traceback.print_exc()
             return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/global-summary")
+def global_summary():
+    rows = global_db_rows("""
+        SELECT
+            wheel_id,
+            COUNT(*) AS total_rolls,
+            MIN(seq) AS min_seq,
+            MAX(seq) AS max_seq,
+            MAX(created_at_utc) AS last_write_utc
+        FROM wheel_rolls
+        GROUP BY wheel_id
+        ORDER BY wheel_id
+    """)
+
+    return jsonify(rows)
+
+
+@app.route("/global-latest")
+def global_latest():
+    rows = global_db_rows("""
+        SELECT
+            wr.wheel_id,
+            wr.seq,
+            wr.number,
+            wr.color,
+            wr.created_at_utc
+        FROM wheel_rolls wr
+        INNER JOIN (
+            SELECT wheel_id, MAX(seq) AS max_seq
+            FROM wheel_rolls
+            GROUP BY wheel_id
+        ) latest
+            ON wr.wheel_id = latest.wheel_id
+           AND wr.seq = latest.max_seq
+        ORDER BY wr.wheel_id
+    """)
+
+    return jsonify(rows)
 
 @app.route("/health")
 def health():
