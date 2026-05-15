@@ -354,6 +354,57 @@ def global_latest():
 
     return jsonify(rows)
 
+@app.route("/global-monitor")
+def global_monitor():
+
+    rows = global_db_rows("""
+        SELECT
+            wheel_id,
+            COUNT(*) AS total_rolls,
+            MAX(seq) AS latest_seq,
+            MAX(created_at_utc) AS last_write_utc
+        FROM wheel_rolls
+        GROUP BY wheel_id
+        ORDER BY wheel_id
+    """)
+
+    now = datetime.now(timezone.utc)
+
+    results = []
+
+    for row in rows:
+
+        status = "OK"
+        stale_minutes = None
+
+        try:
+            last_write = datetime.fromisoformat(row["last_write_utc"])
+            stale_minutes = round(
+                (now - last_write).total_seconds() / 60.0,
+                2
+            )
+
+            if stale_minutes >= 10:
+                status = "DOWN"
+            elif stale_minutes >= 3:
+                status = "STALE"
+            elif stale_minutes >= 1.5:
+                status = "WARNING"
+
+        except Exception:
+            status = "UNKNOWN"
+
+        results.append({
+            "wheel_id": row["wheel_id"],
+            "status": status,
+            "stale_minutes": stale_minutes,
+            "latest_seq": row["latest_seq"],
+            "total_rolls": row["total_rolls"],
+            "last_write_utc": row["last_write_utc"]
+        })
+
+    return jsonify(results)
+
 @app.route("/health")
 def health():
     return jsonify({
