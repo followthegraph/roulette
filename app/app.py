@@ -205,7 +205,7 @@ def index():
     if not session.get("authed"):
         return render_template("locked.html")
     # Authenticated: serve the real page
-    return render_template("index.html")
+    return render_template("index.html",server_name=server_name)
 
 @app.route("/logout")
 def logout():
