@@ -1023,14 +1023,36 @@ async function refreshGlobalMonitor() {
           r.status === "STALE" ? "#ffe0b2" :
           "#f8d7da";
 
-        return `
-          <div style="padding:8px 10px; border-radius:8px; background:${color}; border:1px solid rgba(0,0,0,.15); min-width:160px;">
-            <b>${r.wheel_id}</b><br>
-            Status: ${r.status}<br>
-            Last write: ${Number(r.stale_minutes).toFixed(1)} min ago
-            Seq: ${r.latest_seq}
-          </div>
-        `;
+          const hostMap = {
+  "eu-wheel": "https://eu.getdatbp.com",
+  "flash-wheel": "https://flash.getdatbp.com",
+  "classic-wheel": "https://classic.getdatbp.com",
+  "american-wheel": "https://american.getdatbp.com"
+};
+
+const targetUrl = hostMap[r.wheel_id] || null;
+const currentHost = window.location.hostname;
+const targetHost = targetUrl ? new URL(targetUrl).hostname : null;
+const clickable = targetUrl && targetHost !== currentHost;
+
+const staleSeconds = Number(r.stale_seconds || 0);
+const staleLabel =
+  staleSeconds < 60
+    ? `${Math.round(staleSeconds)} sec ago`
+    : `${Number(r.stale_minutes).toFixed(1)} min ago`;
+
+    return `
+      <div
+        ${clickable ? `onclick="window.open('${targetUrl}', '_blank')"` : ""}
+        style="padding:8px 10px; border-radius:8px; background:${color}; border:1px solid rgba(0,0,0,.15); min-width:160px; cursor:${clickable ? "pointer" : "default"};"
+        title="${clickable ? "Open dashboard" : "Current dashboard"}"
+      >
+        <b>${r.wheel_id}</b><br>
+        Status: ${r.status}<br>
+        Last write: ${staleLabel}<br>
+        Seq: ${r.latest_seq}
+      </div>
+    `;
       }).join("");
 
   } catch (err) {
