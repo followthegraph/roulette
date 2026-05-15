@@ -355,40 +355,80 @@ def global_latest():
     return jsonify(rows)
 
 @app.route("/global-monitor")
+@app.route("/global-monitor")
 def global_monitor():
 
     rows = global_db_rows("""
+        WITH ordered AS (
+            SELECT
+                wheel_id,
+                seq,
+                created_at_utc,
+                LAG(created_at_utc) OVER (
+                    PARTITION BY wheel_id
+                    ORDER BY seq
+                ) AS prev_created
+            FROM wheel_rolls
+        ),
+        timing AS (
+            SELECT
+                wheel_id,
+                ROUND(AVG(
+                    (julianday(created_at_utc) - julianday(prev_created)) * 86400.0
+                ), 2) AS avg_gap_seconds,
+                ROUND(MAX(
+                    (julianday(created_at_utc) - julianday(prev_created)) * 86400.0
+                ), 2) AS max_gap_seconds
+            FROM ordered
+            WHERE prev_created IS NOT NULL
+            GROUP BY wheel_id
+        ),
+        latest AS (
+            SELECT
+                wheel_id,
+                COUNT(*) AS total_rolls,
+                MAX(seq) AS latest_seq,
+                MAX(created_at_utc) AS last_write_utc
+            FROM wheel_rolls
+            GROUP BY wheel_id
+        )
         SELECT
-            wheel_id,
-            COUNT(*) AS total_rolls,
-            MAX(seq) AS latest_seq,
-            MAX(created_at_utc) AS last_write_utc
-        FROM wheel_rolls
-        GROUP BY wheel_id
-        ORDER BY wheel_id
+            latest.wheel_id,
+            latest.total_rolls,
+            latest.latest_seq,
+            latest.last_write_utc,
+            timing.avg_gap_seconds,
+            timing.max_gap_seconds
+        FROM latest
+        LEFT JOIN timing
+            ON latest.wheel_id = timing.wheel_id
+        ORDER BY latest.wheel_id
     """)
 
     now = datetime.now(timezone.utc)
-
     results = []
 
     for row in rows:
-
         status = "OK"
         stale_minutes = None
+        stale_seconds = None
+
+        avg_gap_seconds = row.get("avg_gap_seconds") or 60
+
+        warning_seconds = max(avg_gap_seconds * 3, 120)
+        stale_threshold_seconds = max(avg_gap_seconds * 5, 180)
+        down_threshold_seconds = max(avg_gap_seconds * 10, 600)
 
         try:
             last_write = datetime.fromisoformat(row["last_write_utc"])
-            stale_minutes = round(
-                (now - last_write).total_seconds() / 60.0,
-                2
-            )
+            stale_seconds = round((now - last_write).total_seconds(), 2)
+            stale_minutes = round(stale_seconds / 60.0, 2)
 
-            if stale_minutes >= 10:
+            if stale_seconds >= down_threshold_seconds:
                 status = "DOWN"
-            elif stale_minutes >= 3:
+            elif stale_seconds >= stale_threshold_seconds:
                 status = "STALE"
-            elif stale_minutes >= 1.5:
+            elif stale_seconds >= warning_seconds:
                 status = "WARNING"
 
         except Exception:
@@ -397,7 +437,13 @@ def global_monitor():
         results.append({
             "wheel_id": row["wheel_id"],
             "status": status,
+            "stale_seconds": stale_seconds,
             "stale_minutes": stale_minutes,
+            "avg_gap_seconds": row.get("avg_gap_seconds"),
+            "max_gap_seconds": row.get("max_gap_seconds"),
+            "warning_seconds": round(warning_seconds, 2),
+            "stale_threshold_seconds": round(stale_threshold_seconds, 2),
+            "down_threshold_seconds": round(down_threshold_seconds, 2),
             "latest_seq": row["latest_seq"],
             "total_rolls": row["total_rolls"],
             "last_write_utc": row["last_write_utc"]
