@@ -1051,12 +1051,41 @@ const lastWriteMs = lastWriteUtc ? new Date(lastWriteUtc).getTime() : null;
     </div>
   `;
       }).join("");
-
+      updateLastWriteAges();
   } catch (err) {
     el.innerHTML = `<div style="padding:8px 10px; background:#f8d7da; border-radius:8px;">Global monitor unavailable</div>`;
   }
 }
+function formatAge(msAgo) {
+  const seconds = Math.max(0, Math.floor(msAgo / 1000));
 
+  if (seconds < 60) return `${seconds} sec ago`;
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (minutes < 60) return `${minutes}m ${remainingSeconds}s ago`;
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  return `${hours}h ${remainingMinutes}m ago`;
+}
+
+function updateLastWriteAges() {
+  document.querySelectorAll(".last-write-age").forEach(el => {
+    const ms = Number(el.dataset.lastWriteMs);
+
+    if (!ms || Number.isNaN(ms)) {
+      el.textContent = "—";
+      return;
+    }
+
+    el.textContent = formatAge(Date.now() - ms);
+  });
+}
+
+setInterval(updateLastWriteAges, 1000);
 refreshGlobalMonitor();
 fetchData();
 
