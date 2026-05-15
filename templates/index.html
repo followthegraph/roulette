@@ -1240,6 +1240,12 @@ function computeNeighborsStats(rolls, numbers, strategyLabel) {
   const maxDelay = delays.length ? Math.max(...delays) : '';
   const betSignal = (rollsSince !== '' && avgDelay !== '') ? (rollsSince >= avgDelay ? '? Consider betting' : '? Wait') : '';
 
+  const martingaleRisk = calculateDynamicMartingaleRisk(
+    rollsSince,
+    maxDelay,
+    numbers.length
+  );
+
   return {
     strategy: strategyLabel,
     rollsSince,
@@ -2534,26 +2540,6 @@ function renderHitFrequency(data) {
     }
 
     select.addEventListener('change', updateRisk);
-  });
-
-
-  select.addEventListener("change", () => {
-    localStorage.setItem(storageKey, select.value); // 💾 Save user preference
-
-    const rs = parseInt(select.dataset.rolls);
-    const md = parseInt(select.dataset.max);
-    const def = select.dataset.default;
-
-    if (select.value === "default") {
-      riskSpan.textContent = def;
-    } else {
-      const base = select.value === "double" ? 2 : 3;
-      let total = 0;
-      for (let i = 0; i < Math.max(0, md - rs); i++) {
-        total += base ** i;
-      }
-      riskSpan.textContent = `$${total.toLocaleString()}`;
-    }
   });
 
   </script>
