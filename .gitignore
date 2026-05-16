@@ -33,3 +33,9 @@ cloudflare/config.yml
 
 global/
 tree_structure.txt
+
+# global on eu stores the centralized database
+global/*.sqlite
+global/*.sqlite-*
+global/results/
+global/*.csv
