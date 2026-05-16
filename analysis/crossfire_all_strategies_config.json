@@ -1,0 +1,14 @@
+{
+  "description": "All currently supported Crossfire strategies. Each strategy is one dozen paired with one row. A hit on either leg ends the progression. An overlap hit pays both legs.",
+  "strategies": [
+    "crossfire_1_top",
+    "crossfire_1_middle",
+    "crossfire_1_bottom",
+    "crossfire_2_top",
+    "crossfire_2_middle",
+    "crossfire_2_bottom",
+    "crossfire_3_top",
+    "crossfire_3_middle",
+    "crossfire_3_bottom"
+  ]
+}

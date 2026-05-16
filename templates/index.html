@@ -3,109 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <title>{{ server_name }}</title>
-    <style>
-    @keyframes fadeInScale {
-      from {
-        opacity: 0;
-        transform: scale(0.95);
-      }
-      to {
-        opacity: 1;
-        transform: scale(1);
-      }
-    }
-    #streetStickyWrap {
-      position: sticky;
-      top: 60px; /* adjust if needed based on heatmap or other sticky elements */
-      z-index: 9;
-      background: white;
-      padding: 10px 0;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-    }
-    #heatmap {
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      background: white;
-      padding: 6px 0;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-    }
-
-
-    body { font-family: sans-serif; margin: 20px; font-size: 13px; }
-    h1 { font-size: 18px; }
-    .dashboard { display: flex; gap: 20px; flex-wrap: wrap; }
-    table { border-collapse: collapse; font-size: 12px; min-width: 300px; margin-bottom: 30px; }
-    th, td { border: 1px solid #ccc; padding: 5px; text-align: center; }
-    th { background-color: #eee; cursor: pointer; }
-    .highlight { background-color: #ffcccc; font-weight: bold; }
-    .filters { margin-bottom: 10px; }
-    select[multiple], input[type="text"] {
-      width: 100%;
-      font-size: 12px;
-      box-sizing: border-box;
-    }
-    /* .table-container { flex: 1; min-width: 350px; } */
-
-    .table-wrapper {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      justify-content: flex-start;
-    }
-
-    .table-container {
-      flex: 1 1 400px; /* grow and shrink as needed, base width 400px */
-      min-width: 350px;
-      max-width: 100%;
-      box-sizing: border-box;
-    }
-
-    .ticker {
-      display: flex;
-      flex-wrap: wrap;
-      margin: 10px 0;
-      gap: 5px;
-      max-height: calc(1.6em * 5);
-      overflow: hidden;
-      transition: max-height 0.3s ease;
-    }
-    .ticker:hover { max-height: 999px; }
-    .ticker div {
-      padding: 6px 8px;
-      border-radius: 4px;
-      font-weight: bold;
-      color: white;
-      font-size: 13px;
-      min-width: 30px;
-      text-align: center;
-    }
-    .red { background-color: red; }
-    .black { background-color: black; }
-    .green { background-color: green; }
-  .gold-border { border: 2px solid #ff69b4 !important; }
-
-  .heat-box {
-    padding: 5px 8px;
-    border-radius: 4px;
-    min-width: 22px;
-    text-align: center;
-    font-weight: bold;
-    color: #fff;
-    transition: background-color 0.3s ease;
-  }
-
-  .dark-red {
-    background-color: #8B0000 !important;
-    color: white;
-    font-weight: bold;
-  }
-
-</style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
   </head>
   <body>
     <h1>Roulette Strategy Dashboard</h1>
-    <div id="globalHealthBanner" style="display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 16px 0;"></div><div id="urgencyOverlay" style="position: fixed; top: 12px; right: 12px; width: 360px; max-width: calc(100vw - 24px); z-index: 1001; background: rgba(255,255,255,0.65); backdrop-filter: blur(8px); border: 1px solid rgba(0,0,0,0.14); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); overflow: hidden; transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;">
+    <div id="globalHealthBanner" class="sticky-health-banner"></div>
+    <div id="urgencyOverlay">
       <div id="urgencyOverlayHeader" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; background: rgba(17,24,39,0.55); color:#fff; transition: background 0.2s ease;">
         <div>
           <div style="font-weight:bold;">Urgency Monitor</div>
@@ -165,9 +68,10 @@
 </div>
 
 <div id="heatmap" class="heatmap"></div>
-    <div id="justHitTicket"
+  <!--
+  <div id="justHitTicket"
       style="padding: 6px; background: #1a1a1a; color: white; font-size: 13px; border-radius: 4px; margin-bottom: 20px;"></div>
-
+   -->
     <div id="neighborsPanel" style="margin: 0 0 20px 0; padding: 16px; border: 1px solid #ccc; border-radius: 10px; background: #fafafa; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
       <h3 style="margin-top: 0;">Neighbors: <span id="neighborsPanelTitle">0 ± 1</span></h3>
       <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: end; margin-bottom: 12px;">
@@ -225,16 +129,19 @@
       style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px;"></div>
       <div id="coldestTicker" class="ticker" style="margin-bottom: 20px;"></div>
 
-      
       <div id="streetStickyWrap">
-        <label for="streetLimit">Number of Top Streets to Show:</label>
-        <input type="number" id="streetLimit" min="1" max="12" value="4" style="width: 50px; margin-right: 10px;margin-bottom: 20px;">
-        <div id="streetTicker" class="ticker"></div>
-        <!-- #streetStatsLabel will be added here dynamically -->
-      <div id="preferredGroupDisplay" style="text-align:center;margin-top: 10px; font-weight: bold; font-size: 1.1em;"></div>
-      </div>
-
+        <div class="street-compact-header">
+          <span class="street-title">📊 Top Streets</span>
       
+          <label for="streetLimit">Show</label>
+          <input type="number" id="streetLimit" min="1" max="12" value="4">
+      
+          <span id="preferredGroupDisplay"></span>
+        </div>
+      
+        <div id="streetTicker" class="ticker street-ticker-compact"></div>
+        <!-- #streetStatsLabel will be added here dynamically -->
+      </div>
       
       <div class="dashboard">
         <div class="table-wrapper">
@@ -515,7 +422,7 @@ let allData = [];
       console.log("🎯 Last Hit Number:", lastHitNumber);
       if (!isNaN(lastHitNumber)) {
         try {
-          updateJustHitTicket(lastHitNumber);
+          // updateJustHitTicket(lastHitNumber);
         } catch (e) { console.warn('JustHitTicket failed:', e); }
       } else {
         console.warn("Could not determine last hit number.");
@@ -567,7 +474,7 @@ renderUrgencyOverlay(allData);
 setTimeout(() => {
   if (typeof rolls !== "undefined" && rolls.length > 0) {
     const lastNumber = rolls[0].number;
-    updateJustHitTicket(lastNumber);
+    // updateJustHitTicket(lastNumber);
   } else {
     console.warn("[JustHitTicket] Rolls data not available yet.");
   }
@@ -1020,6 +927,16 @@ function updateLastWriteAges() {
   });
 }
 
+function updateStickyScrollState() {
+  if (window.scrollY > 80) {
+    document.body.classList.add("scrolled");
+  } else {
+    document.body.classList.remove("scrolled");
+  }
+}
+
+window.addEventListener("scroll", updateStickyScrollState);
+updateStickyScrollState();
 setInterval(updateLastWriteAges, 1000);
 refreshGlobalMonitor();
 fetchData();
@@ -1058,66 +975,9 @@ fetchData();
 
 
 </script>
-
-<style>
-  .tooltip {
-    position: absolute;
-    background-color: #fff;
-    color: #000;
-    border: 1px solid #ccc;
-    padding: 6px 10px;
-    font-size: 12px;
-    border-radius: 4px;
-    box-shadow: 0 0 5px rgba(0,0,0,0.2);
-    pointer-events: none;
-    z-index: 1000;
-    display: none;
-    white-space: pre-wrap;
-    max-width: 300px;
-  }
-  .tooltip .red {
-  color: red; font-weight: bold; }
-.tooltip .blue {
-  color: blue; font-weight: bold; font-weight: bold; }
-.gold-border { border: 2px solid #ff69b4 !important; }
-
-.heat-box {
-  padding: 5px 8px;
-  border-radius: 4px;
-  min-width: 22px;
-  text-align: center;
-  font-weight: bold;
-  color: #fff;
-
-  transition: background-color 0.3s ease;
-
-
-.dark-red {
-  background-color: #8B0000 !important;
-  color: white;
-  font-weight: bold;
-}
-
-
-.urgency-tier-label { font-size: 11px; font-weight: bold; letter-spacing: 0.04em; text-transform: uppercase; margin: 10px 0 6px; color: #374151; }
-.urgency-item { width: 100%; text-align: left; border: 1px solid rgba(0,0,0,0.12); border-left-width: 5px; border-radius: 8px; padding: 8px 10px; background: rgba(255,255,255,0.86); margin-bottom: 8px; cursor: pointer; }
-.urgency-item:hover { background: rgba(255,255,255,0.96); }
-.urgency-item.critical { border-left-color: #b91c1c; }
-.urgency-item.imminent { border-left-color: #ea580c; }
-.urgency-item.watch { border-left-color: #2563eb; }
-.urgency-item-header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:4px; }
-.urgency-item-title { font-weight: bold; color:#111827; }
-.urgency-item-badge { font-size:11px; font-weight:bold; border-radius:999px; padding:2px 7px; }
-.urgency-item.critical .urgency-item-badge { background:#fee2e2; color:#991b1b; }
-.urgency-item.imminent .urgency-item-badge { background:#ffedd5; color:#9a3412; }
-.urgency-item.watch .urgency-item-badge { background:#dbeafe; color:#1d4ed8; }
-.urgency-item-meta { display:flex; flex-wrap:wrap; gap:8px 12px; font-size:12px; color:#374151; }
-.urgency-eff { text-decoration: underline dotted; cursor: help; }
-.urgency-highlighted { outline: 3px solid rgba(124,58,237,0.95) !important; outline-offset: 2px; }
-</style>
     <div id="tooltip" class="tooltip"></div>
 
-    <script>
+  <script>
 
 
 const generalBets = {
