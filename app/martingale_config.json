@@ -1,0 +1,115 @@
+{
+  "default": {
+    "progression": "double",
+    "base_stake": 1,
+    "max_risk": 2000,
+    "max_levels": 10
+  },
+  "bet_type_defaults": {
+    "General": {
+      "base_stake": 1,
+      "progression": "double"
+    },
+    "Outside": {
+      "base_stake": 1,
+      "progression": "double"
+    },
+    "Horizontal Doubles": {
+      "base_stake": 1,
+      "progression": "double"
+    },
+    "Vertical Doubles": {
+      "base_stake": 1,
+      "progression": "double"
+    },
+    "Quads": {
+      "base_stake": 1,
+      "progression": "double"
+    }
+  },
+  "strategy_overrides": {
+    "Zero": {
+      "base_stake": 4,
+      "progression": "double"
+    },
+    "Tiers": {
+      "base_stake": 6,
+      "progression": "double"
+    },
+    "Orphelins": {
+      "base_stake": 5,
+      "progression": "double"
+    },
+    "Voisins Du Zero": {
+      "base_stake": 9,
+      "progression": "double"
+    },
+    "Crossfire, 1st & top": {
+      "base_stake": 2,
+      "progression": "triple"
+    },
+    "Crossfire, 1st & middle": {
+      "base_stake": 2,
+      "progression": "triple"
+    },
+    "Crossfire, 1st & bottom": {
+      "base_stake": 2,
+      "progression": "triple"
+    },
+    "Crossfire, 2nd & top": {
+      "base_stake": 2,
+      "progression": "triple"
+    },
+    "Crossfire, 2nd & middle": {
+      "base_stake": 2,
+      "progression": "triple"
+    },
+    "Crossfire, 2nd & bottom": {
+      "base_stake": 2,
+      "progression": "triple"
+    },
+    "Crossfire, 3rd & top": {
+      "base_stake": 2,
+      "progression": "triple"
+    },
+    "Crossfire, 3rd & middle": {
+      "base_stake": 2,
+      "progression": "triple"
+    },
+    "Crossfire, 3rd & bottom": {
+      "base_stake": 2,
+      "progression": "triple"
+    },
+    "1st & 2nd & 12": {
+      "base_stake": 2,
+      "progression": "double"
+    },
+    "1st & 3rd & 12": {
+      "base_stake": 2,
+      "progression": "double"
+    },
+    "2nd & 3rd & 12": {
+      "base_stake": 2,
+      "progression": "double"
+    },
+    "Top & Middle Row": {
+      "base_stake": 2,
+      "progression": "double"
+    },
+    "Top & Bottom Row": {
+      "base_stake": 2,
+      "progression": "double"
+    },
+    "Middle & Bottom Row": {
+      "base_stake": 2,
+      "progression": "double"
+    }
+  },
+  "adjusted_rolls": {
+    "enabled": true,
+    "subtract_zero": true,
+    "subtract_duplicate_occurrences": false,
+    "subtract_consecutive_duplicate_occurrences": true,
+    "minimum_adjusted_rolls": 0
+  }
+}

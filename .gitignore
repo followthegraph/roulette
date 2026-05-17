@@ -39,3 +39,5 @@ global/*.sqlite
 global/*.sqlite-*
 global/results/
 global/*.csv
+
+analysis/*.zip

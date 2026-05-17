@@ -7,7 +7,12 @@ $ErrorActionPreference = "Stop"
 
 $Root = if ($env:ROLL_ROOT) { $env:ROLL_ROOT } else { "C:\Roll" }
 
-$Python = "$Root\python-embed\App\Python\python.exe"
+if ($Root -like "C:\projects\roulette_dist*") {
+    $Python = "C:\Python\python.exe"
+} else {
+    $Python = "$Root\python-embed\App\Python\python.exe"
+}
+
 $Cloudflared = "$Root\cloudflare\cloudflared.exe"
 $ConfigPath = "$Root\config\config.local.json"
 

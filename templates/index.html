@@ -570,8 +570,23 @@ setTimeout(() => {
         ) return;
 
         const pctFilter = Number(document.getElementById("maxDelayPctFilter")?.value || 0);
-        const rollsSince = Number(row["Rolls Since Last Hit"]);
-        const maxDelay = Number(row["Max Delay"]);
+        const rawRollsSince = Number(row["Rolls Since Last Hit"]);
+        const adjustedRollsSince = Number(row["Adjusted Rolls Since Last Hit"]);
+        const rollsSince = Number.isFinite(adjustedRollsSince)
+          ? adjustedRollsSince
+          : rawRollsSince;
+
+          const maxDelay = Number(row["Max Delay"]);
+
+        const rawRisk = row["Martingale Risk"] ?? "";
+        const adjustedRisk = row["Adjusted Martingale Risk"] ?? "";
+        const baseStake = row["Martingale Base Stake"] ?? "";
+        const progression = row["Martingale Progression"] ?? "";
+
+        const threshold = getRiskThreshold();
+        const adjustedRiskNum = parseMoneyValue(adjustedRisk);
+        const rawRiskNum = parseMoneyValue(rawRisk);
+        const riskToCheck = Number.isFinite(adjustedRiskNum) ? adjustedRiskNum : rawRiskNum;
 
         if (pctFilter > 0) {
           if (!Number.isFinite(rollsSince) || !Number.isFinite(maxDelay) || maxDelay <= 0) return;
@@ -579,6 +594,15 @@ setTimeout(() => {
           const pctOfMax = (rollsSince / maxDelay) * 100;
           if (pctOfMax < pctFilter) return;
         }
+
+        // if (
+        //   Number.isFinite(threshold) &&
+        //   Number.isFinite(riskToCheck) &&
+        //   riskToCheck > threshold
+        // ) {
+        //   return;
+        // }
+
         const tr = document.createElement("tr");
         const keys = (row["BetType"] === "General" || row["BetType"] === "Outside")
           ? ["Betting Strategy", "Rolls Since Last Hit", "Avg Delay", "Max Delay", "Bet Signal"]
@@ -590,7 +614,29 @@ setTimeout(() => {
           let value = row[key];
           if (key === "Betting Strategy" && value.startsWith("'")) value = value.substring(1);
           if (key === "Betting Strategy") value = displayStrategyName(value);
-          td.textContent = value;
+          if (key === "Rolls Since Last Hit") {
+            const raw = Number(row["Rolls Since Last Hit"]);
+            const adjustedRemaining = Number(row["Adjusted Rolls Since Last Hit"]);
+
+            const adjustmentAmount =
+              Number.isFinite(raw) &&
+              Number.isFinite(adjustedRemaining)
+                ? Math.max(0, raw - adjustedRemaining)
+                : null;
+
+                if (
+                  adjustmentAmount !== null &&
+                  adjustmentAmount > 0
+                ) {
+                  td.innerHTML = `${raw} <span class="adjusted-value">(${adjustedRemaining})</span>`;
+                  td.title = `Raw: ${raw} | Adjusted: ${adjustedRemaining} | Adjustment Applied: ${raw - adjustedRemaining}`;
+                } else {
+                  td.textContent = raw ?? "";
+                }
+          }
+          else {
+            td.textContent = value ?? "";
+          }
           if (key === "Bet Signal" && value === "? Consider betting") {
             td.classList.add("highlight");
           }
@@ -610,31 +656,26 @@ setTimeout(() => {
       }
           tr.appendChild(td);
         });
-        // const mrTd = document.createElement("td");
-        // mrTd.textContent = row["Martingale Risk"] ?? "";
-        // tr.appendChild(mrTd);
         const mrTd = document.createElement("td");
+        let riskClass = "risk-unknown";
 
-        const select = document.createElement("select");
-        select.className = "risk-select";
-        select.dataset.rolls = row["Rolls Since Last Hit"];
-        select.dataset.max = row["Max Delay"];
-        select.dataset.default = row["Martingale Risk"] ?? "";
+        if (Number.isFinite(riskToCheck)) {
+          if (!Number.isFinite(threshold) || threshold <= 0) {
+            riskClass = "risk-ok";
+          } else {
+            const riskPct = riskToCheck / threshold;
 
-        const strategyName = row["Betting Strategy"];
-        const storageKey = `riskPref_${strategyName}`;
-        const savedPref = localStorage.getItem(storageKey);
-
-        // Add dropdown options
-        ["double", "triple"].forEach(opt => {
-          const option = document.createElement("option");
-          option.value = opt;
-          option.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
-          if ((savedPref && savedPref === opt)){
-            option.selected = true;
+            if (riskPct >= 1) {
+              riskClass = "risk-over";
+            } else if (riskPct >= 0.75) {
+              riskClass = "risk-near";
+            } else {
+              riskClass = "risk-ok";
+            }
           }
-          select.appendChild(option);
-        });
+        }
+
+        mrTd.classList.add(riskClass);
 
         // Span for displaying calculated risk
         const riskSpan = document.createElement("span");
@@ -642,33 +683,26 @@ setTimeout(() => {
         riskSpan.style.marginLeft = "6px";
 
         // Function to update the risk display
-        const updateRisk = () => {
-          const rs = parseInt(select.dataset.rolls);
-          const md = parseInt(select.dataset.max);
-          const def = select.dataset.default;
 
-          if (select.value === "default") {
-            riskSpan.textContent = def;
-          } else {
-            const base = select.value === "double" ? 2 : 3;
-            let total = 0;
-            for (let i = 0; i < Math.max(0, md - rs); i++) {
-              total += base ** i;
-            }
-            riskSpan.textContent = `$${total.toLocaleString()}`;
-          }
-        };
+        const riskReduction =
+          Number.isFinite(rawRiskNum) &&
+          Number.isFinite(adjustedRiskNum)
+            ? Math.max(0, rawRiskNum - adjustedRiskNum)
+            : null;
 
-        // Update on change and save to localStorage
-        select.addEventListener("change", () => {
-          localStorage.setItem(storageKey, select.value);
-          updateRisk();
-        });
+        const riskDisplay =
+        riskReduction && riskReduction > 0
+          ? `${rawRisk} <span class="adjusted-value">(-$${riskReduction.toLocaleString()})</span>`
+          : rawRisk;
 
-        // Run update immediately after adding the span
-        updateRisk();
+        riskSpan.innerHTML = riskDisplay || "";
 
-        mrTd.appendChild(select);
+        const progressionBadge = document.createElement("span");
+        progressionBadge.className = `progression-badge progression-${String(progression).toLowerCase()}`;
+        progressionBadge.textContent = progression === "triple" ? "3x" : "2x";
+        progressionBadge.title = `Base stake: ${baseStake} | Progression: ${progression}`;
+
+        mrTd.appendChild(progressionBadge);
         mrTd.appendChild(riskSpan);
         tr.appendChild(mrTd);
 
@@ -1316,7 +1350,11 @@ function buildUrgencyCandidates(dataRows) {
     name.includes('Street') ||
     name.includes('Line');
     if (!isPreferred) return;
-    const rollsSince = Number(row['Rolls Since Last Hit']);
+    const rawRollsSince = Number(row["Rolls Since Last Hit"]);
+    const adjustedRollsSince = Number(row["Adjusted Rolls Since Last Hit"]);
+    const rollsSince = Number.isFinite(adjustedRollsSince)
+      ? adjustedRollsSince
+      : rawRollsSince;
     const maxDelay = Number(row['Max Delay']);
     if (!Number.isFinite(rollsSince) || !Number.isFinite(maxDelay)) return;
     const distance = maxDelay - rollsSince;
@@ -1325,7 +1363,10 @@ function buildUrgencyCandidates(dataRows) {
     else if (distance >= 1 && distance <= 3) tier = 'imminent';
     else if (distance >= 4 && distance <= 5) tier = 'watch';
     else return;
-    const riskValue = parseMoneyValue(row['Martingale Risk']);
+    const riskLabel =
+      row["Adjusted Martingale Risk"] || row["Martingale Risk"] || "—";
+
+    const riskValue = parseMoneyValue(riskLabel);
     const minNetProfit = estimateMinNetProfit(name);
     const efficiency = (riskValue && minNetProfit !== null && riskValue > 0) ? Number((minNetProfit / riskValue).toFixed(4)) : null;
     const overtimeDetails = getCriticalOvertimeDetails(rawName, tier);
@@ -1346,7 +1387,7 @@ function buildUrgencyCandidates(dataRows) {
       efficiencyTooltip: overtimeDetails ? `${baseTooltip}\n${overtimeDetails}` : baseTooltip,
       numbers: getCoveredNumbersForStrategy(name),
       minNetProfit,
-      riskLabel: row['Martingale Risk'] || '—',
+      riskLabel,
       category: row['BetType'] || '',
     });
   });
@@ -1404,6 +1445,11 @@ function buildUrgencyCandidates(dataRows) {
     return a.name.localeCompare(b.name);
   });
   return candidates;
+}
+
+
+function getRiskThreshold() {
+  return Number(document.getElementById("urgencyThresholdInput")?.value || 2000);
 }
 
 function clearUrgencyRacetrackHighlight(force = false) {
@@ -1480,16 +1526,21 @@ function renderUrgencyOverlay(dataRows) {
     clearBtn.addEventListener('click', () => clearUrgencyRacetrackHighlight(true));
     thresholdInput.addEventListener('input', () => {
       const sanitized = sanitizeUrgencyThreshold(thresholdInput.value, 2000);
+
       if (String(sanitized) !== String(thresholdInput.value).trim()) {
         thresholdInput.dataset.pendingSanitize = 'true';
       } else {
         delete thresholdInput.dataset.pendingSanitize;
       }
+
+      renderTables(false);
       renderUrgencyOverlay(allData);
     });
     thresholdInput.addEventListener('blur', () => {
       thresholdInput.value = String(sanitizeUrgencyThreshold(thresholdInput.value, 2000));
       delete thresholdInput.dataset.pendingSanitize;
+
+      renderTables(false);
       renderUrgencyOverlay(allData);
     });
   } else {
