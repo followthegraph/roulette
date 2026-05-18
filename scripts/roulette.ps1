@@ -98,7 +98,7 @@ function Start-All {
 }
 
 switch ($Action) {
-    "start"       { Start-All }
+    "start"       { Stop-Processes; Start-All }
     "stop"        { Stop-Processes }
     "kill"        { Stop-Processes }
     "update"      { Update-Code }
