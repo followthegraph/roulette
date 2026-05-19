@@ -204,10 +204,17 @@ with sync_playwright() as p:
     context = p.chromium.launch_persistent_context(
         PROFILE_DIR,
         headless=False,
-        viewport={"width": 1400, "height": 900}
+        viewport={"width": 1400, "height": 900},
+        args=[
+            "--disable-dev-shm-usage",
+            "--disable-session-crashed-bubble",
+            "--no-first-run",
+            "--no-default-browser-check"
+        ]
     )
 
     page = context.pages[0] if context.pages else context.new_page()
+    page.set_default_timeout(30000)
 
     print("Loading Bovada page...")
     page.goto(URL, wait_until="domcontentloaded", timeout=60000)
@@ -229,23 +236,47 @@ with sync_playwright() as p:
 
     print("Running. Press CTRL+C to stop.")
 
-    last_refresh = time.time()
-
     while True:
         time.sleep(5)
 
-        if STATS_REFRESH_MODE == "reopen_last_500":
-            if time.time() - last_refresh >= STATS_REFRESH_INTERVAL_SECONDS:
-                last_refresh = time.time()
+        try:
+            # browser/window died
+            if page.is_closed():
+                raise Exception("Browser page closed")
 
-                try:
-                    if not stats_visible(game_frame):
-                        print("Stats lost focus. Reopening Statistics -> Last 500...")
-                        open_last_500(game_frame)
-                        print("Stats reopened. Existing scraper timer should continue.")
+            # frame disappeared
+            if game_frame.is_detached():
+                raise Exception("Game frame detached")
 
-                    else:
-                        print("Stats still visible.")
+            # stats vanished
+            if not stats_visible(game_frame):
+                print("Stats not visible. Reopening...")
 
-                except Exception as e:
-                    print(f"Watchdog failed to refresh stats: {e}")
+                game_frame = find_game_frame(page)
+
+                open_last_500(game_frame)
+
+                inject_scraper(game_frame)
+
+                print("Recovered stats successfully.")
+
+        except Exception as e:
+            print(f"Persistence recovery triggered: {e}")
+
+            try:
+                page.reload(wait_until="domcontentloaded", timeout=60000)
+
+                page.wait_for_timeout(10000)
+
+                login_if_needed(page)
+
+                game_frame = find_game_frame(page)
+
+                open_last_500(game_frame)
+
+                inject_scraper(game_frame)
+
+                print("Full recovery complete.")
+
+            except Exception as inner:
+                print(f"Recovery failed: {inner}")
