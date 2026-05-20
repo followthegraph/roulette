@@ -46,6 +46,18 @@ DEFAULT_MARTINGALE_CONFIG = {
         "Top & Middle Row": {"base_stake": 2, "progression": "double"},
         "Top & Bottom Row": {"base_stake": 2, "progression": "double"},
         "Middle & Bottom Row": {"base_stake": 2, "progression": "double"},
+            
+        "Adj Street, 1st & 2nd": {"base_stake": 2, "progression": "double"},
+        "Adj Street, 2nd & 3rd": {"base_stake": 2, "progression": "double"},
+        "Adj Street, 3rd & 4th": {"base_stake": 2, "progression": "double"},
+        "Adj Street, 4th & 5th": {"base_stake": 2, "progression": "double"},
+        "Adj Street, 5th & 6th": {"base_stake": 2, "progression": "double"},
+        "Adj Street, 6th & 7th": {"base_stake": 2, "progression": "double"},
+        "Adj Street, 7th & 8th": {"base_stake": 2, "progression": "double"},
+        "Adj Street, 8th & 9th": {"base_stake": 2, "progression": "double"},
+        "Adj Street, 9th & 10th": {"base_stake": 2, "progression": "double"},
+        "Adj Street, 10th & 11th": {"base_stake": 2, "progression": "double"},
+        "Adj Street, 11th & 12th": {"base_stake": 2, "progression": "double"},
     },
     "adjusted_rolls": {
         "enabled": True,
@@ -258,6 +270,17 @@ def generate_strategy_stats(
         "Tenth Street (28, 29, 30)": [28, 29, 30],
         "Eleventh Street (31, 32, 33)": [31, 32, 33],
         "Twelfth Street (34, 35, 36)": [34, 35, 36],
+        "Adj Street, 1st & 2nd": [1, 2, 3, 4, 5, 6],
+        "Adj Street, 2nd & 3rd": [4, 5, 6, 7, 8, 9],
+        "Adj Street, 3rd & 4th": [7, 8, 9, 10, 11, 12],
+        "Adj Street, 4th & 5th": [10, 11, 12, 13, 14, 15],
+        "Adj Street, 5th & 6th": [13, 14, 15, 16, 17, 18],
+        "Adj Street, 6th & 7th": [16, 17, 18, 19, 20, 21],
+        "Adj Street, 7th & 8th": [19, 20, 21, 22, 23, 24],
+        "Adj Street, 8th & 9th": [22, 23, 24, 25, 26, 27],
+        "Adj Street, 9th & 10th": [25, 26, 27, 28, 29, 30],
+        "Adj Street, 10th & 11th": [28, 29, 30, 31, 32, 33],
+        "Adj Street, 11th & 12th": [31, 32, 33, 34, 35, 36],
     }
 
     outside_bets = {
