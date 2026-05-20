@@ -248,6 +248,55 @@ def run_remote_action(server, action):
         "stderr": result.stderr,
     }
 
+def get_strategy_numbers(strategy):
+    strategy = str(strategy or "").lstrip("'").strip()
+
+    bets = {
+        "Zero": [0, 3, 12, 15, 26, 32, 35],
+        "Tiers": [5, 8, 10, 11, 13, 16, 23, 24, 27, 30, 33, 36],
+        "Orphelins": [1, 6, 9, 14, 17, 20, 31, 34],
+        "Voisins Du Zero": [0, 2, 3, 4, 7, 12, 15, 18, 19, 21, 22, 25, 26, 28, 29, 32, 35],
+
+        "Top Row": list(range(3, 37, 3)),
+        "Middle Row": list(range(2, 36, 3)),
+        "Bottom Row": list(range(1, 35, 3)),
+
+        "1st & 12": list(range(1, 13)),
+        "2nd & 12": list(range(13, 25)),
+        "3rd & 12": list(range(25, 37)),
+
+        "First Street": [1, 2, 3],
+        "Second Street": [4, 5, 6],
+        "Third Street": [7, 8, 9],
+        "Fourth Street": [10, 11, 12],
+        "Fifth Street": [13, 14, 15],
+        "Sixth Street": [16, 17, 18],
+        "Seventh Street": [19, 20, 21],
+        "Eighth Street": [22, 23, 24],
+        "Ninth Street": [25, 26, 27],
+        "Tenth Street": [28, 29, 30],
+        "Eleventh Street": [31, 32, 33],
+        "Twelfth Street": [34, 35, 36],
+
+        "Adj Street, 1st & 2nd": [1, 2, 3, 4, 5, 6],
+        "Adj Street, 2nd & 3rd": [4, 5, 6, 7, 8, 9],
+        "Adj Street, 3rd & 4th": [7, 8, 9, 10, 11, 12],
+        "Adj Street, 4th & 5th": [10, 11, 12, 13, 14, 15],
+        "Adj Street, 5th & 6th": [13, 14, 15, 16, 17, 18],
+        "Adj Street, 6th & 7th": [16, 17, 18, 19, 20, 21],
+        "Adj Street, 7th & 8th": [19, 20, 21, 22, 23, 24],
+        "Adj Street, 8th & 9th": [22, 23, 24, 25, 26, 27],
+        "Adj Street, 9th & 10th": [25, 26, 27, 28, 29, 30],
+        "Adj Street, 10th & 11th": [28, 29, 30, 31, 32, 33],
+        "Adj Street, 11th & 12th": [31, 32, 33, 34, 35, 36],
+    }
+
+    # Strip parenthetical street labels.
+    if "(" in strategy:
+        strategy = strategy.split("(")[0].strip()
+
+    return bets.get(strategy)
+
 # --- Utility JSON helpers ---
 def json_read(path: Path):
     with path.open("r", encoding="utf-8") as f:
@@ -573,6 +622,102 @@ def global_monitor():
         })
 
     return jsonify(results)
+
+@app.route("/strategy-profile")
+def strategy_profile():
+    import statistics
+    import math
+
+    wheel_id = request.args.get("wheel_id") or WHEEL_ID
+    strategy = request.args.get("strategy", "").lstrip("'").strip()
+    window = request.args.get("window", "500")
+
+    numbers = get_strategy_numbers(strategy)
+
+    if not numbers:
+        return jsonify({
+            "ok": False,
+            "error": "Unknown strategy",
+            "strategy": strategy
+        }), 404
+
+    limit_clause = ""
+    params = [wheel_id]
+
+    if window != "all":
+        try:
+            limit = max(1, int(window))
+            limit_clause = "LIMIT ?"
+            params.append(limit)
+        except Exception:
+            limit = 500
+            limit_clause = "LIMIT ?"
+            params.append(limit)
+
+    rows = global_db_rows(f"""
+        SELECT number, seq, created_at_utc
+        FROM wheel_rolls
+        WHERE wheel_id = ?
+        ORDER BY seq DESC
+        {limit_clause}
+    """, tuple(params))
+
+    rolls = list(reversed(rows))  # oldest -> newest
+
+    hit_indices = [
+        idx for idx, row in enumerate(rolls)
+        if int(row["number"]) in numbers
+    ]
+
+    delays = [
+        hit_indices[i] - hit_indices[i - 1]
+        for i in range(1, len(hit_indices))
+    ]
+
+    latest_index = len(rolls) - 1
+    last_hit_index = hit_indices[-1] if hit_indices else None
+    current_delay = latest_index - last_hit_index if last_hit_index is not None else None
+
+    def percentile(values, p):
+        if not values:
+            return None
+        values = sorted(values)
+        k = (len(values) - 1) * (p / 100)
+        f = math.floor(k)
+        c = math.ceil(k)
+        if f == c:
+            return values[int(k)]
+        return values[f] * (c - k) + values[c] * (k - f)
+
+    def current_percentile(values, current):
+        if not values or current is None:
+            return None
+        below_or_equal = sum(1 for v in values if v <= current)
+        return round((below_or_equal / len(values)) * 100, 2)
+
+    profile = {
+        "ok": True,
+        "wheel_id": wheel_id,
+        "strategy": strategy,
+        "window": window,
+        "covered_numbers": numbers,
+        "roll_count": len(rolls),
+        "hit_count": len(hit_indices),
+        "current_delay": current_delay,
+        "avg_delay": round(statistics.mean(delays), 2) if delays else None,
+        "median_delay": round(statistics.median(delays), 2) if delays else None,
+        "stddev_delay": round(statistics.stdev(delays), 2) if len(delays) > 1 else None,
+        "min_delay": min(delays) if delays else None,
+        "max_delay": max(delays) if delays else None,
+        "p90_delay": round(percentile(delays, 90), 2) if delays else None,
+        "p95_delay": round(percentile(delays, 95), 2) if delays else None,
+        "p99_delay": round(percentile(delays, 99), 2) if delays else None,
+        "current_percentile": current_percentile(delays, current_delay),
+        "recent_delays": delays[-10:],
+        "delays": delays,
+    }
+
+    return jsonify(profile)
 
 @app.route("/global-roll-timing")
 def global_roll_timing():
