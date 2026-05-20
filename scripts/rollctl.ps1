@@ -81,7 +81,8 @@ function Invoke-GitPull {
 
     Push-Location C:\Roll
 
-    $output = & $Git pull 2>&1
+    $cmd = "`"$Git`" pull 2>&1"
+    $output = cmd.exe /c $cmd
     $exitCode = $LASTEXITCODE
 
     Pop-Location
