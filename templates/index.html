@@ -883,6 +883,22 @@ setInterval(() => {
   refreshGlobalMonitor();
 }, GLOBAL_MONITOR_POLL_MS);
 
+const dashboardWindows = {};
+
+function openDashboardWindow(url, wheelId) {
+  const windowName = `roulette_${wheelId}`;
+
+  const existing = dashboardWindows[windowName];
+
+  if (existing && !existing.closed) {
+    existing.focus();
+    return;
+  }
+
+  dashboardWindows[windowName] = window.open(url, windowName);
+  dashboardWindows[windowName]?.focus();
+}
+
 async function refreshGlobalMonitor() {
   const el = document.getElementById("globalHealthBanner");
   if (!el) return;
@@ -932,7 +948,7 @@ const urgencyLine = `
 
   return `
     <div
-      ${clickable ? `onclick="window.open('${targetUrl}', '_blank')"` : ""}
+      ${clickable ? `onclick="openDashboardWindow('${targetUrl}', '${r.wheel_id}')"` : ""}
       style="padding:8px 10px; border-radius:8px; background:${color}; border:1px solid rgba(0,0,0,.15); min-width:160px; cursor:${clickable ? "pointer" : "default"};"
       title="${clickable ? "Open dashboard" : "Current dashboard"}"
     >
