@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from werkzeug.middleware.proxy_fix import ProxyFix
 from pathlib import Path
 from datetime import datetime, timezone
+import subprocess
 import threading
 import requests
 import ipaddress
