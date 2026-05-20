@@ -304,6 +304,33 @@
         </div>
       </div>
 
+      <div id="strategyProfilePreview" class="strategy-profile-preview"></div>
+
+      <div id="strategyProfileModal" class="strategy-profile-modal hidden">
+        <div class="strategy-profile-modal-card">
+          <div class="strategy-profile-modal-header">
+            <div>
+              <h2 id="strategyProfileTitle">Strategy Profile</h2>
+              <div id="strategyProfileSubtitle"></div>
+            </div>
+            <button id="strategyProfileClose">Close</button>
+          </div>
+    
+          <div class="strategy-profile-controls">
+            <label>Window</label>
+            <select id="strategyProfileWindow">
+              <option value="500">Last 500</option>
+              <option value="1000">Last 1000</option>
+              <option value="2500">Last 2500</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+    
+          <div id="strategyProfileBody"></div>
+        </div>
+      </div>
+
+
     <script>
 
     window.latestRolls = [];
@@ -708,10 +735,7 @@ setTimeout(() => {
         tr.appendChild(mrTd);
 
 
-        //
 
-//
-// after tr is built and all tds added...
         const name = tr.cells[0].textContent;
 
         if (name.startsWith("Crossfire,")) {
@@ -752,6 +776,9 @@ setTimeout(() => {
       otherRows.forEach(row => otherTable.appendChild(row));
       crossfireRows.forEach(row => crossfireTable.appendChild(row));
       outsideRows.forEach(row => outsideTable.appendChild(row))
+
+      attachStrategyProfileHandlers();
+
 
     }
 
@@ -1007,38 +1034,6 @@ updateStickyScrollState();
 setInterval(updateLastWriteAges, 1000);
 refreshGlobalMonitor();
 fetchData();
-
-//
-// function getPreferredGroup(csvData) {
-//   const groupA = ["'1st & 12", "'2nd & 12", "'3rd & 12"];
-//   const groupB = ["'Top Row", "'Middle Row", "'Bottom Row"];
-
-//   const rowsSince = (name) => {
-//     const row = csvData.find(d => d["Betting Strategy"] === name);
-//     return row && row["Rolls Since Last Hit"] ? parseFloat(row["Rolls Since Last Hit"]) : null;
-//   };
-
-//   function getTop2Stats(group) {
-//     const values = group.map(rowsSince).filter(v => v !== null).sort((a, b) => b - a).slice(0, 2);
-//     if (values.length < 2) return null;
-//     const avg = (values[0] + values[1]) / 2;
-//     const sum = values[0] + values[1];
-//     return { avg, sum };
-//   }
-
-//   const aStats = getTop2Stats(groupA);
-//   const bStats = getTop2Stats(groupB);
-
-//   if (!aStats || !bStats) return "❓ Not enough data to compare rows vs thirds";
-
-//   if (aStats.avg > bStats.avg) return "✅ Prefer Thirds (1st/2nd/3rd & 12)";
-//   if (bStats.avg > aStats.avg) return "✅ Prefer Rows (Top/Middle/Bottom)";
-//   return aStats.sum > bStats.sum
-//     ? "✅ Prefer Thirds (sum advantage)"
-//     : "✅ Prefer Rows (sum advantage)";
-// }
-
-//
 
 
 </script>
@@ -2537,6 +2532,153 @@ function renderHitFrequency(data) {
     select.addEventListener('change', updateRisk);
   });
 
+  let activeProfileStrategy = null;
+
+function getCurrentWheelId() {
+  const host = window.location.hostname;
+  if (host.includes("flash")) return "flash-wheel";
+  if (host.includes("classic")) return "classic-wheel";
+  if (host.includes("eu")) return "eu-wheel";
+  return null;
+}
+
+async function fetchStrategyProfile(strategy, windowSize = "500") {
+  const wheelId = getCurrentWheelId();
+  const url = `/strategy-profile?wheel_id=${encodeURIComponent(wheelId)}&strategy=${encodeURIComponent(strategy)}&window=${encodeURIComponent(windowSize)}`;
+  return fetch(url).then(r => r.json());
+}
+
+function renderProfileStats(profile) {
+  const percentileText =
+    profile.current_delay === 0
+      ? "Just hit"
+      : profile.current_percentile !== null
+        ? `${profile.current_percentile}%`
+        : "—";
+
+  return `
+    <div class="strategy-profile-grid">
+      <div class="strategy-profile-stat"><b>Current Delay</b>${profile.current_delay ?? "—"}</div>
+      <div class="strategy-profile-stat"><b>Percentile</b>${percentileText}</div>
+      <div class="strategy-profile-stat"><b>Avg</b>${profile.avg_delay ?? "—"}</div>
+      <div class="strategy-profile-stat"><b>Median</b>${profile.median_delay ?? "—"}</div>
+      <div class="strategy-profile-stat"><b>Std Dev</b>${profile.stddev_delay ?? "—"}</div>
+      <div class="strategy-profile-stat"><b>Max</b>${profile.max_delay ?? "—"}</div>
+      <div class="strategy-profile-stat"><b>P95</b>${profile.p95_delay ?? "—"}</div>
+      <div class="strategy-profile-stat"><b>P99</b>${profile.p99_delay ?? "—"}</div>
+    </div>
+  `;
+}
+
+function renderHistogram(delays) {
+  if (!Array.isArray(delays) || !delays.length) return "<p>No delay history.</p>";
+
+  const max = Math.max(...delays);
+  const buckets = new Array(12).fill(0);
+
+  delays.forEach(d => {
+    const idx = Math.min(11, Math.floor((d / Math.max(max, 1)) * 12));
+    buckets[idx]++;
+  });
+
+  const bucketMax = Math.max(...buckets);
+
+  return `
+    <h3>Delay Histogram</h3>
+    <div class="strategy-bars">
+      ${buckets.map(v => `<div class="strategy-bar" title="${v}" style="height:${Math.max(4, (v / bucketMax) * 100)}%"></div>`).join("")}
+    </div>
+  `;
+}
+
+function renderProfilePreview(profile) {
+  return `
+    <b>${profile.strategy}</b><br>
+    Current: ${profile.current_delay ?? "—"} rolls<br>
+    Avg: ${profile.avg_delay ?? "—"} | Median: ${profile.median_delay ?? "—"}<br>
+    Max: ${profile.max_delay ?? "—"} | P95: ${profile.p95_delay ?? "—"}<br>
+    Std Dev: ${profile.stddev_delay ?? "—"}
+  `;
+}
+
+function attachStrategyProfileHandlers() {
+  document.querySelectorAll("td").forEach(td => {
+    if (td.dataset.profileBound === "1") return;
+
+    const row = td.closest("tr");
+    if (!row || td.cellIndex < 4) return;
+
+    const strategyCell = row.cells[0];
+    const signalCell = row.cells[row.cells.length - 2];
+
+    if (td !== signalCell) return;
+
+    td.dataset.profileBound = "1";
+    td.style.cursor = "help";
+    td.title = "Hover for stats; click for full profile";
+
+    td.addEventListener("mouseenter", async (e) => {
+      if (window.innerWidth < 900) return;
+      const strategy = strategyCell.textContent.trim();
+      const preview = document.getElementById("strategyProfilePreview");
+
+      try {
+        const profile = await fetchStrategyProfile(strategy, "500");
+        if (!profile.ok) return;
+
+        preview.innerHTML = renderProfilePreview(profile);
+        preview.style.left = `${Math.min(window.innerWidth - 340, e.clientX + 14)}px`;
+        preview.style.top = `${Math.min(window.innerHeight - 180, e.clientY + 14)}px`;
+        preview.style.display = "block";
+      } catch {}
+    });
+
+    td.addEventListener("mouseleave", () => {
+      document.getElementById("strategyProfilePreview").style.display = "none";
+    });
+
+    td.addEventListener("click", async () => {
+      activeProfileStrategy = strategyCell.textContent.trim();
+      await openStrategyProfileModal(activeProfileStrategy);
+    });
+  });
+}
+
+async function openStrategyProfileModal(strategy) {
+  const modal = document.getElementById("strategyProfileModal");
+  const body = document.getElementById("strategyProfileBody");
+  const title = document.getElementById("strategyProfileTitle");
+  const subtitle = document.getElementById("strategyProfileSubtitle");
+  const windowSize = document.getElementById("strategyProfileWindow").value;
+
+  modal.classList.remove("hidden");
+  title.textContent = strategy;
+  body.innerHTML = "Loading...";
+
+  const profile = await fetchStrategyProfile(strategy, windowSize);
+
+  subtitle.textContent = `${profile.wheel_id} • ${profile.roll_count} rolls • ${profile.hit_count} hits`;
+
+  body.innerHTML = `
+    ${renderProfileStats(profile)}
+    ${renderHistogram(profile.delays)}
+    <h3>Recent Delays</h3>
+    <p>${(profile.recent_delays || []).join(", ") || "—"}</p>
+    <h3>Covered Numbers</h3>
+    <p>${(profile.covered_numbers || []).join(", ")}</p>
+  `;
+}
+
+document.getElementById("strategyProfileClose").addEventListener("click", () => {
+  document.getElementById("strategyProfileModal").classList.add("hidden");
+});
+
+document.getElementById("strategyProfileWindow").addEventListener("change", () => {
+  if (activeProfileStrategy) openStrategyProfileModal(activeProfileStrategy);
+});
+
+
   </script>
+
   </body>
 </html>
