@@ -2544,7 +2544,13 @@ function getCurrentWheelId() {
 
 async function fetchStrategyProfile(strategy, windowSize = "500") {
   const wheelId = getCurrentWheelId();
-  const url = `/strategy-profile?wheel_id=${encodeURIComponent(wheelId)}&strategy=${encodeURIComponent(strategy)}&window=${encodeURIComponent(windowSize)}`;
+
+  const url =
+    `https://eu.getdatbp.com/strategy-profile` +
+    `?wheel_id=${encodeURIComponent(wheelId)}` +
+    `&strategy=${encodeURIComponent(strategy)}` +
+    `&window=${encodeURIComponent(windowSize)}`;
+
   return fetch(url).then(r => r.json());
 }
 
