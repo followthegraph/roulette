@@ -296,7 +296,9 @@ switch ($Action) {
 
     "update" {
         $Git = Get-GitExe
-        & $Git config --global --add safe.directory C:/Roll
+
+        & $Git config --system --add safe.directory C:/Roll
+        & $Git config --system --add safe.directory C:\Roll
 
         Push-Location C:\Roll
         & $Git pull
@@ -306,7 +308,10 @@ switch ($Action) {
 
     "update_and_restart" {
         $Git = Get-GitExe
-        & $Git config --global --add safe.directory C:/Roll
+
+        & $Git config --system --add safe.directory C:/Roll
+        & $Git config --system --add safe.directory C:\Roll
+
         Push-Location C:\Roll
         & $Git pull
         Pop-Location
