@@ -13,6 +13,11 @@ param(
         "update_and_restart",
         "kill_processes",
         "json_status",
+        "restart_all_clean",
+        "start_persistence",
+        "restart_persistence",
+        "start_collector",
+        "restart_collector",
         "restart_all_clean"
     )]
     [string]$Action
@@ -199,15 +204,33 @@ switch ($Action) {
     }
 
     "start_app" {
-        Start-App
-        Write-Host "Started app."
+        Start-ScheduledTask -TaskName "RouletteStartApp"
+        Write-Host "App start task triggered."
+    }
+
+    "start_persistence" {
+        Start-ScheduledTask -TaskName "RouletteStartPersistence"
+        Write-Host "Persistence start task triggered."
+    }
+
+    "restart_persistence" {
+        Stop-Persistence
+        Stop-Browser
+        Start-Sleep -Seconds 2
+        Start-ScheduledTask -TaskName "RouletteStartPersistence"
+        Write-Host "Persistence restart task triggered."
+    }
+
+    "start_collector" {
+        Start-ScheduledTask -TaskName "RouletteStartCollector"
+        Write-Host "Collector start task triggered."
     }
 
     "restart_app" {
         Stop-App
         Start-Sleep -Seconds 2
-        Start-App
-        Write-Host "Restarted app."
+        Start-ScheduledTask -TaskName "RouletteStartApp"
+        Write-Host "App restart task triggered."
     }
 
     "stop_tunnel" {
@@ -216,15 +239,22 @@ switch ($Action) {
     }
 
     "start_tunnel" {
-        Start-Tunnel
-        Write-Host "Started tunnel."
+        Start-ScheduledTask -TaskName "RouletteStartTunnel"
+        Write-Host "Tunnel start task triggered."
+    }
+
+    "restart_collector" {
+        Stop-Collector
+        Start-Sleep -Seconds 2
+        Start-ScheduledTask -TaskName "RouletteStartCollector"
+        Write-Host "Collector restart task triggered."
     }
 
     "restart_tunnel" {
         Stop-Tunnel
         Start-Sleep -Seconds 2
-        Start-Tunnel
-        Write-Host "Restarted tunnel."
+        Start-ScheduledTask -TaskName "RouletteStartTunnel"
+        Write-Host "Tunnel restart task triggered."
     }
 
     "restart_all" {
@@ -277,7 +307,7 @@ switch ($Action) {
 
         Start-Sleep -Seconds 3
 
-        Start-ScheduledTask -TaskName "RouletteStart"
+        Start-ScheduledTask -TaskName "RouletteStartAll"
 
         Write-Host "Clean restart task triggered."
     }
