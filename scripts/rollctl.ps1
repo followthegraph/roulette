@@ -277,8 +277,8 @@ switch ($Action) {
 
         Start-Sleep -Seconds 3
 
-        powershell.exe -ExecutionPolicy Bypass -File "C:\Roll\scripts\roulette.ps1" start
+        Start-ScheduledTask -TaskName "RouletteStart"
 
-        Write-Host "Clean restart complete."
+        Write-Host "Clean restart task triggered."
     }
 }
