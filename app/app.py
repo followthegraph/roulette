@@ -252,6 +252,27 @@ def get_strategy_numbers(strategy):
     strategy = str(strategy or "").lstrip("'").strip()
 
     bets = {
+        "Odds": list(range(1, 37, 2)),
+        "Even": list(range(2, 37, 2)),
+        "Red": [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36],
+        "Black": [2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35],
+        "1 to 18": list(range(1, 19)),
+        "19 to 36": list(range(19, 37)),
+
+        "First Line": [1, 2, 3, 4, 5, 6],
+        "Second Line": [7, 8, 9, 10, 11, 12],
+        "Third Line": [13, 14, 15, 16, 17, 18],
+        "Fourth Line": [19, 20, 21, 22, 23, 24],
+        "Fifth Line": [25, 26, 27, 28, 29, 30],
+        "Sixth Line": [31, 32, 33, 34, 35, 36],
+
+        "1st & 2nd & 12": list(range(1, 25)),
+        "1st & 3rd & 12": list(range(1, 13)) + list(range(25, 37)),
+        "2nd & 3rd & 12": list(range(13, 37)),
+
+        "Top & Middle Row": list(range(3, 37, 3)) + list(range(2, 36, 3)),
+        "Top & Bottom Row": list(range(3, 37, 3)) + list(range(1, 35, 3)),
+        "Middle & Bottom Row": list(range(2, 36, 3)) + list(range(1, 35, 3)),
         "Zero": [0, 3, 12, 15, 26, 32, 35],
         "Tiers": [5, 8, 10, 11, 13, 16, 23, 24, 27, 30, 33, 36],
         "Orphelins": [1, 6, 9, 14, 17, 20, 31, 34],
@@ -277,6 +298,16 @@ def get_strategy_numbers(strategy):
         "Tenth Street": [28, 29, 30],
         "Eleventh Street": [31, 32, 33],
         "Twelfth Street": [34, 35, 36],
+
+        "Crossfire, 1st & top": sorted(set(list(range(1, 13)) + list(range(3, 37, 3)))),
+        "Crossfire, 1st & middle": sorted(set(list(range(1, 13)) + list(range(2, 36, 3)))),
+        "Crossfire, 1st & bottom": sorted(set(list(range(1, 13)) + list(range(1, 35, 3)))),
+        "Crossfire, 2nd & top": sorted(set(list(range(13, 25)) + list(range(3, 37, 3)))),
+        "Crossfire, 2nd & middle": sorted(set(list(range(13, 25)) + list(range(2, 36, 3)))),
+        "Crossfire, 2nd & bottom": sorted(set(list(range(13, 25)) + list(range(1, 35, 3)))),
+        "Crossfire, 3rd & top": sorted(set(list(range(25, 37)) + list(range(3, 37, 3)))),
+        "Crossfire, 3rd & middle": sorted(set(list(range(25, 37)) + list(range(2, 36, 3)))),
+        "Crossfire, 3rd & bottom": sorted(set(list(range(25, 37)) + list(range(1, 35, 3)))),
 
         "Adj Street, 1st & 2nd": [1, 2, 3, 4, 5, 6],
         "Adj Street, 2nd & 3rd": [4, 5, 6, 7, 8, 9],
