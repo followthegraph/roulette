@@ -45,6 +45,7 @@ REMOTE_SERVERS = {
         "host": "BP-Euro0",
         "cred": r"C:\Roll\certs\eu-rouletteadmin.xml",
         "collector": True,
+        "local": True,
     },
     "flash": {
         "host": "BP-EuroFlash",
@@ -192,18 +193,23 @@ def clear_attempts(ip):
 import subprocess
 
 def get_remote_status(server):
-    ps = f"""
-    $Cred = Import-Clixml "{server['cred']}";
-    Invoke-Command -ComputerName {server['host']} `
-      -Credential $Cred `
-      -Authentication Negotiate `
-      -ScriptBlock {{
-        powershell.exe -ExecutionPolicy Bypass -File "C:\\Roll\\scripts\\rollctl.ps1" -Action json_status
-      }}
-    """
+    if server.get("local"):
+        ps = r'powershell.exe -ExecutionPolicy Bypass -File "C:\Roll\scripts\rollctl.ps1" -Action json_status'
+        cmd = ["powershell.exe", "-NoProfile", "-Command", ps]
+    else:
+        ps = f"""
+        $Cred = Import-Clixml "{server['cred']}";
+        Invoke-Command -ComputerName {server['host']} `
+          -Credential $Cred `
+          -Authentication Negotiate `
+          -ScriptBlock {{
+            powershell.exe -ExecutionPolicy Bypass -File "C:\\Roll\\scripts\\rollctl.ps1" -Action json_status
+          }}
+        """
+        cmd = ["powershell.exe", "-NoProfile", "-Command", ps]
 
     result = subprocess.run(
-        ["powershell.exe", "-NoProfile", "-Command", ps],
+        cmd,
         capture_output=True,
         text=True,
         timeout=30
