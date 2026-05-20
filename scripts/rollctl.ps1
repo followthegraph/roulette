@@ -11,7 +11,8 @@ param(
         "restart_all",
         "update",
         "update_and_restart",
-        "kill_processes"
+        "kill_processes",
+        "json_status"
     )]
     [string]$Action
 )
