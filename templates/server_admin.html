@@ -17,7 +17,7 @@
 
   <script>
     async function loadStatus() {
-      const res = await fetch("/admin/server-status");
+      const res = await fetch("/admin/server-status?t=" + Date.now());
       const data = await res.json();
 
       const root = document.getElementById("servers");
