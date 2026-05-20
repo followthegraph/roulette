@@ -74,6 +74,25 @@ function Get-GitExe {
     throw "git.exe not found. Install Git or add it to PATH."
 }
 
+function Invoke-GitPull {
+    $Git = Get-GitExe
+
+    & $Git config --system --add safe.directory C:/Roll 2>$null
+
+    Push-Location C:\Roll
+
+    $output = & $Git pull 2>&1
+    $exitCode = $LASTEXITCODE
+
+    Pop-Location
+
+    $output | ForEach-Object { Write-Host $_ }
+
+    if ($exitCode -ne 0) {
+        throw "git pull failed with exit code $exitCode"
+    }
+}
+
 function Get-RollJsonStatus {
     $root = "C:\Roll"
 
@@ -295,33 +314,24 @@ switch ($Action) {
     }
 
     "update" {
-        $Git = Get-GitExe
-
-        & $Git config --system --add safe.directory C:/Roll
-        & $Git config --system --add safe.directory C:\Roll
-
-        Push-Location C:\Roll
-        & $Git pull
-        Pop-Location
-        Write-Host "Updated repo."
+        Invoke-GitPull
+        Write-Host "Update complete."
     }
 
     "update_and_restart" {
-        $Git = Get-GitExe
+        Invoke-GitPull
 
-        & $Git config --system --add safe.directory C:/Roll
-        & $Git config --system --add safe.directory C:\Roll
-
-        Push-Location C:\Roll
-        & $Git pull
-        Pop-Location
+        Stop-Persistence
+        Stop-Collector
         Stop-App
         Stop-Tunnel
-        Start-Sleep -Seconds 2
-        Start-App
-        Start-Sleep -Seconds 2
-        Start-Tunnel
-        Write-Host "Updated and restarted app/tunnel."
+        Stop-Browser
+
+        Start-Sleep -Seconds 3
+
+        Start-ScheduledTask -TaskName "RouletteStartAll"
+
+        Write-Host "Update and clean restart task triggered."
     }
 
     "kill_processes" {
