@@ -471,6 +471,7 @@ let allData = [];
 
 renderTables(true);
 renderUrgencyOverlay(allData);
+saveUrgencySnapshot(allData);
 setTimeout(() => {
   if (typeof rolls !== "undefined" && rolls.length > 0) {
     const lastNumber = rolls[0].number;
@@ -889,6 +890,8 @@ async function refreshGlobalMonitor() {
   try {
     const res = await fetch(`https://eu.getdatbp.com/global-monitor?t=${Date.now()}`);
     const rows = await res.json();
+    const urgencyRes = await fetch(`https://eu.getdatbp.com/global-urgency-snapshots?t=${Date.now()}`);
+    const urgencyMap = await urgencyRes.json();
 
     el.innerHTML = rows
       .filter(r => r.wheel_id !== "local-dev")
@@ -913,6 +916,19 @@ const clickable = targetUrl && targetHost !== currentHost;
 
 const lastWriteUtc = r.last_write_utc || "";
 const lastWriteMs = lastWriteUtc ? new Date(lastWriteUtc).getTime() : null;
+const urgency = urgencyMap[r.wheel_id] || {};
+const summary = urgency.summary || {};
+const crit = summary.critical || 0;
+const imm = summary.imminent || 0;
+const watch = summary.watch || 0;
+
+const urgencyLine = `
+  <div class="global-urgency-mini">
+    <span class="${crit ? "urg-mini critical" : "urg-mini"}">Critical: ${crit}</span>
+    <span class="${imm ? "urg-mini imminent" : "urg-mini"}">Imminent: ${imm}</span>
+    <span class="${watch ? "urg-mini watch" : "urg-mini"}">Watch: ${watch}</span>
+  </div>
+`;
 
   return `
     <div
@@ -924,6 +940,7 @@ const lastWriteMs = lastWriteUtc ? new Date(lastWriteUtc).getTime() : null;
       Status: ${r.status}<br>
       Last write: <span class="last-write-age" data-last-write-ms="${lastWriteMs || ""}">—</span><br>
       Seq: ${r.latest_seq}
+      ${urgencyLine}
     </div>
   `;
       }).join("");
@@ -1290,6 +1307,48 @@ function getUrgencyThreshold() {
   return sanitizeUrgencyThreshold(input ? input.value : 2000, 2000);
 }
 
+function buildUrgencySnapshot(candidates) {
+  const summary = { critical: 0, imminent: 0, watch: 0 };
+
+  const top = (Array.isArray(candidates) ? candidates : [])
+    .slice(0, 10)
+    .map(c => {
+      if (summary[c.tier] !== undefined) summary[c.tier]++;
+
+      return {
+        name: c.name,
+        tier: c.tier,
+        rollsSince: c.rollsSince,
+        maxDelay: c.maxDelay,
+        distance: c.distance,
+        risk: c.riskLabel || "—"
+      };
+    });
+
+  // Count all candidates, not just top 10
+  (Array.isArray(candidates) ? candidates : []).forEach(c => {
+    if (summary[c.tier] !== undefined) summary[c.tier]++;
+  });
+
+  return { summary, top };
+}
+
+async function saveUrgencySnapshot(dataRows) {
+  try {
+    const candidates = buildUrgencyCandidates(dataRows);
+    const snapshot = buildUrgencySnapshot(candidates);
+
+    await fetch("/urgency-snapshot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(snapshot)
+    });
+  } catch (err) {
+    console.warn("Failed to save urgency snapshot:", err);
+  }
+}
+
+
 function getStoredRiskModeForStrategy(rawName) {
   const key = `riskPref_${rawName}`;
   const stored = localStorage.getItem(key);
@@ -1535,6 +1594,7 @@ function renderUrgencyOverlay(dataRows) {
 
       renderTables(false);
       renderUrgencyOverlay(allData);
+      saveUrgencySnapshot(allData);
     });
     thresholdInput.addEventListener('blur', () => {
       thresholdInput.value = String(sanitizeUrgencyThreshold(thresholdInput.value, 2000));
@@ -1542,6 +1602,7 @@ function renderUrgencyOverlay(dataRows) {
 
       renderTables(false);
       renderUrgencyOverlay(allData);
+      saveUrgencySnapshot(allData);
     });
   } else {
     applyOverlayCollapsedState(toggleEl.dataset.collapsed === 'true');

@@ -30,6 +30,7 @@ ROULETTE_ALL_JSON = DATA_DIR / "roulette_data_all.json"
 CONFIG_PATH = ROOT_DIR / "config" / "config.local.json"
 ENV_PATH = ROOT_DIR / ".env"
 GLOBAL_DB_PATH = ROOT_DIR / "global" / "global_rolls.sqlite"
+URGENCY_SNAPSHOT_JSON = DATA_DIR / "urgency_snapshot.json"
 
 load_dotenv(ENV_PATH, override=True)
 
@@ -622,6 +623,57 @@ def health():
         "server": os.environ.get("SERVER_NAME", "unknown"),
         "time": datetime.now(timezone.utc).isoformat()
     })
+
+@app.route("/urgency-snapshot", methods=["GET", "POST"])
+def urgency_snapshot():
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+
+        snapshot = {
+            "wheel_id": WHEEL_ID,
+            "server_name": server_name,
+            "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "summary": payload.get("summary", {}),
+            "top": payload.get("top", []),
+        }
+
+        json_write(URGENCY_SNAPSHOT_JSON, snapshot)
+        return jsonify({"ok": True, "snapshot": snapshot})
+
+    if not URGENCY_SNAPSHOT_JSON.exists():
+        return jsonify({
+            "wheel_id": WHEEL_ID,
+            "server_name": server_name,
+            "updated_at_utc": None,
+            "summary": {"critical": 0, "imminent": 0, "watch": 0},
+            "top": [],
+        })
+
+    return jsonify(json_read(URGENCY_SNAPSHOT_JSON))
+
+@app.route("/global-urgency-snapshots")
+def global_urgency_snapshots():
+    hosts = {
+        "eu-wheel": "https://eu.getdatbp.com",
+        "flash-wheel": "https://flash.getdatbp.com",
+        "classic-wheel": "https://classic.getdatbp.com",
+    }
+
+    results = {}
+
+    for wheel_id, base_url in hosts.items():
+        try:
+            r = requests.get(f"{base_url}/urgency-snapshot", timeout=4)
+            results[wheel_id] = r.json()
+        except Exception as e:
+            results[wheel_id] = {
+                "wheel_id": wheel_id,
+                "error": str(e),
+                "summary": {"critical": 0, "imminent": 0, "watch": 0},
+                "top": [],
+            }
+
+    return jsonify(results)
 
 if __name__ == "__main__":
     host = os.environ.get("HOST", "0.0.0.0")

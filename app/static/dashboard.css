@@ -354,3 +354,36 @@
     background-color: #f3f4f6 !important;
     color: #6b7280;
   }
+
+  .global-urgency-mini {
+    margin-top: 5px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    font-size: 11px;
+  }
+  
+  .urg-mini {
+    padding: 2px 5px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.55);
+    color: #374151;
+  }
+  
+  .urg-mini.critical {
+    background: #fee2e2;
+    color: #991b1b;
+    font-weight: bold;
+  }
+  
+  .urg-mini.imminent {
+    background: #ffedd5;
+    color: #9a3412;
+    font-weight: bold;
+  }
+  
+  .urg-mini.watch {
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-weight: bold;
+  }
