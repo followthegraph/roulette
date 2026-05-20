@@ -470,3 +470,47 @@
     background: #2563eb;
     min-width: 3px;
   }
+
+  .strategy-bars {
+    display: flex;
+    align-items: end;
+    height: 120px;
+    gap: 3px;
+    border: 1px solid #ddd;
+    padding: 8px;
+    border-radius: 10px 10px 0 0;
+    background: #fafafa;
+  }
+  
+  .strategy-bar-wrap {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: end;
+  }
+  
+  .strategy-bar {
+    width: 100%;
+    background: #2563eb;
+    min-height: 4px;
+  }
+  
+  .strategy-bar-labels {
+    display: flex;
+    gap: 3px;
+    border: 1px solid #ddd;
+    border-top: 0;
+    padding: 4px 8px 8px;
+    border-radius: 0 0 10px 10px;
+    background: #fafafa;
+  }
+  
+  .strategy-bar-label {
+    flex: 1;
+    font-size: 10px;
+    color: #4b5563;
+    text-align: center;
+    transform: rotate(-35deg);
+    transform-origin: top center;
+    min-height: 26px;
+  }

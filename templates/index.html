@@ -2574,19 +2574,44 @@ function renderHistogram(delays) {
   if (!Array.isArray(delays) || !delays.length) return "<p>No delay history.</p>";
 
   const max = Math.max(...delays);
-  const buckets = new Array(12).fill(0);
+  const min = Math.min(...delays);
+  const bucketCount = 12;
+  const bucketSize = Math.max(1, Math.ceil((max - min + 1) / bucketCount));
 
-  delays.forEach(d => {
-    const idx = Math.min(11, Math.floor((d / Math.max(max, 1)) * 12));
-    buckets[idx]++;
+  const buckets = Array.from({ length: bucketCount }, (_, i) => {
+    const start = min + i * bucketSize;
+    const end = start + bucketSize - 1;
+    return { start, end, count: 0 };
   });
 
-  const bucketMax = Math.max(...buckets);
+  delays.forEach(d => {
+    const idx = Math.min(
+      bucketCount - 1,
+      Math.floor((d - min) / bucketSize)
+    );
+    buckets[idx].count++;
+  });
+
+  const bucketMax = Math.max(...buckets.map(b => b.count), 1);
 
   return `
     <h3>Delay Histogram</h3>
+
     <div class="strategy-bars">
-      ${buckets.map(v => `<div class="strategy-bar" title="${v}" style="height:${Math.max(4, (v / bucketMax) * 100)}%"></div>`).join("")}
+      ${buckets.map(b => `
+        <div class="strategy-bar-wrap" title="${b.start}-${b.end}: ${b.count}">
+          <div
+            class="strategy-bar"
+            style="height:${Math.max(4, (b.count / bucketMax) * 100)}%"
+          ></div>
+        </div>
+      `).join("")}
+    </div>
+
+    <div class="strategy-bar-labels">
+      ${buckets.map(b => `
+        <div class="strategy-bar-label">${b.start}-${b.end}</div>
+      `).join("")}
     </div>
   `;
 }
@@ -2602,42 +2627,56 @@ function renderProfilePreview(profile) {
 }
 
 function attachStrategyProfileHandlers() {
-  document.querySelectorAll("td").forEach(td => {
-    if (td.dataset.profileBound === "1") return;
-
-    const row = td.closest("tr");
-    if (!row || td.cellIndex < 4) return;
-
+  document.querySelectorAll(
+    "#otherTable tbody tr, #crossfireTable tbody tr, #frenchTable tbody tr, #outsideTable tbody tr, #streetTable tbody tr, #lineTable tbody tr"
+  ).forEach(row => {
     const strategyCell = row.cells[0];
-    const signalCell = row.cells[row.cells.length - 2];
+    if (!strategyCell) return;
 
-    if (td !== signalCell) return;
+    let signalCell = null;
 
-    td.dataset.profileBound = "1";
-    td.style.cursor = "help";
-    // td.title = "Hover for stats; click for full profile";
+    Array.from(row.cells).forEach(cell => {
+      const txt = cell.textContent.trim();
+      if (txt.includes("Consider betting") || txt.includes("Wait")) {
+        signalCell = cell;
+      }
+    });
 
-    td.addEventListener("mouseenter", async (e) => {
+    if (!signalCell) return;
+    if (signalCell.dataset.profileBound === "1") return;
+
+    signalCell.dataset.profileBound = "1";
+    signalCell.style.cursor = "help";
+    signalCell.title = "Hover for stats; click for full profile";
+
+    signalCell.addEventListener("mouseenter", async (e) => {
       if (window.innerWidth < 900) return;
+
       const strategy = strategyCell.textContent.trim();
       const preview = document.getElementById("strategyProfilePreview");
 
       try {
         const profile = await fetchStrategyProfile(strategy, "500");
-        if (!profile.ok) return;
+        if (!profile.ok) {
+          preview.innerHTML = `<b>${strategy}</b><br>No profile data found.`;
+        } else {
+          preview.innerHTML = renderProfilePreview(profile);
+        }
 
-        preview.innerHTML = renderProfilePreview(profile);
         preview.style.left = `${Math.min(window.innerWidth - 340, e.clientX + 14)}px`;
         preview.style.top = `${Math.min(window.innerHeight - 180, e.clientY + 14)}px`;
         preview.style.display = "block";
-      } catch {}
+      } catch (err) {
+        preview.innerHTML = `<b>${strategy}</b><br>Profile request failed.`;
+        preview.style.display = "block";
+      }
     });
 
-    td.addEventListener("mouseleave", () => {
+    signalCell.addEventListener("mouseleave", () => {
       document.getElementById("strategyProfilePreview").style.display = "none";
     });
 
-    td.addEventListener("click", async () => {
+    signalCell.addEventListener("click", async () => {
       activeProfileStrategy = strategyCell.textContent.trim();
       await openStrategyProfileModal(activeProfileStrategy);
     });
