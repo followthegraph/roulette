@@ -273,16 +273,7 @@ switch ($Action) {
 
         Start-Sleep -Seconds 3
 
-        Start-App
-        Start-Sleep -Seconds 2
-
-        Start-Tunnel
-        Start-Sleep -Seconds 2
-
-        Start-Persistence
-        Start-Sleep -Seconds 2
-
-        Start-Collector
+        powershell.exe -ExecutionPolicy Bypass -File "C:\Roll\scripts\roulette.ps1" -Action start
 
         Write-Host "Clean restart complete."
     }
