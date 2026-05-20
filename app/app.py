@@ -198,7 +198,7 @@ def get_remote_status(server):
       -Credential $Cred `
       -Authentication Negotiate `
       -ScriptBlock {{
-        powershell.exe -ExecutionPolicy Bypass -File "C:\\Roll\\scripts\\rollctl.ps1" -Action status
+        powershell.exe -ExecutionPolicy Bypass -File "C:\\Roll\\scripts\\rollctl.ps1" -Action json_status
       }}
     """
 
