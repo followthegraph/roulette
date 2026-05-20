@@ -44,6 +44,94 @@ function Show-Status {
     }
 }
 
+function Get-RollJsonStatus {
+    $root = "C:\Roll"
+
+    $configPath = Join-Path $root "config\config.local.json"
+    $config = Get-Content $configPath -Raw | ConvertFrom-Json
+
+    $serverName = $config.server_name
+    $wheelId = $config.wheel_id
+    $port = $config.flask_port
+    $collectorExpected = $config.run_global_collector -eq $true
+
+    $procs = Get-CimInstance Win32_Process | Where-Object {
+        $_.Name -in @(
+            "python.exe",
+            "cloudflared.exe",
+            "chrome.exe",
+            "chromium.exe",
+            "msedge.exe"
+        )
+    }
+
+    $appProc = $procs | Where-Object {
+        $_.CommandLine -match "app\.py"
+    }
+
+    $persistenceProc = $procs | Where-Object {
+        $_.CommandLine -match "session_persistence"
+    }
+
+    $collectorProc = $procs | Where-Object {
+        $_.CommandLine -match "collector\.py"
+    }
+
+    $tunnelProc = $procs | Where-Object {
+        $_.Name -eq "cloudflared.exe"
+    }
+
+    $browserProc = $procs | Where-Object {
+        $_.Name -in @("chrome.exe", "chromium.exe", "msedge.exe")
+    }
+
+    $healthOk = $false
+    $health = $null
+
+    try {
+        $health = Invoke-RestMethod "http://127.0.0.1:$port/health" -TimeoutSec 3
+        $healthOk = $health.status -eq "ok"
+    } catch {}
+
+    [pscustomobject]@{
+        server_name = $serverName
+        wheel_id = $wheelId
+        port = $port
+        checked_at = (Get-Date).ToString("s")
+
+        app = @{
+            running = [bool]$appProc
+            count = @($appProc).Count
+        }
+
+        tunnel = @{
+            running = [bool]$tunnelProc
+            count = @($tunnelProc).Count
+        }
+
+        persistence = @{
+            running = [bool]$persistenceProc
+            count = @($persistenceProc).Count
+        }
+
+        browser = @{
+            running = [bool]$browserProc
+            count = @($browserProc).Count
+        }
+
+        collector = @{
+            expected = $collectorExpected
+            running = [bool]$collectorProc
+            count = @($collectorProc).Count
+        }
+
+        health = @{
+            ok = $healthOk
+            raw = $health
+        }
+    } | ConvertTo-Json -Depth 10
+}
+
 function Stop-App {
     Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force
 }
@@ -66,6 +154,10 @@ function Start-Tunnel {
 switch ($Action) {
     "status" {
         Show-Status
+    }
+
+    "json_status" {
+        Get-RollJsonStatus
     }
 
     "stop_app" {
