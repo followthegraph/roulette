@@ -1309,26 +1309,22 @@ function getUrgencyThreshold() {
 
 function buildUrgencySnapshot(candidates) {
   const summary = { critical: 0, imminent: 0, watch: 0 };
+  const list = Array.isArray(candidates) ? candidates : [];
 
-  const top = (Array.isArray(candidates) ? candidates : [])
-    .slice(0, 10)
-    .map(c => {
-      if (summary[c.tier] !== undefined) summary[c.tier]++;
-
-      return {
-        name: c.name,
-        tier: c.tier,
-        rollsSince: c.rollsSince,
-        maxDelay: c.maxDelay,
-        distance: c.distance,
-        risk: c.riskLabel || "—"
-      };
-    });
-
-  // Count all candidates, not just top 10
-  (Array.isArray(candidates) ? candidates : []).forEach(c => {
-    if (summary[c.tier] !== undefined) summary[c.tier]++;
+  list.forEach(c => {
+    if (summary[c.tier] !== undefined) {
+      summary[c.tier]++;
+    }
   });
+
+  const top = list.slice(0, 10).map(c => ({
+    name: c.name,
+    tier: c.tier,
+    rollsSince: c.rollsSince,
+    maxDelay: c.maxDelay,
+    distance: c.distance,
+    risk: c.riskLabel || "—"
+  }));
 
   return { summary, top };
 }
