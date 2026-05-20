@@ -228,13 +228,17 @@ switch ($Action) {
     }
 
     "restart_all" {
+        Stop-Persistence
+        Stop-Collector
         Stop-App
         Stop-Tunnel
-        Start-Sleep -Seconds 2
-        Start-App
-        Start-Sleep -Seconds 2
-        Start-Tunnel
-        Write-Host "Restarted app and tunnel."
+        Stop-Browser
+
+        Start-Sleep -Seconds 3
+
+        powershell.exe -ExecutionPolicy Bypass -File "C:\Roll\scripts\roulette.ps1" start
+
+        Write-Host "Restarted all services."
     }
 
     "update" {
@@ -273,7 +277,7 @@ switch ($Action) {
 
         Start-Sleep -Seconds 3
 
-        powershell.exe -ExecutionPolicy Bypass -File "C:\Roll\scripts\roulette.ps1" -Action start
+        powershell.exe -ExecutionPolicy Bypass -File "C:\Roll\scripts\roulette.ps1" start
 
         Write-Host "Clean restart complete."
     }
