@@ -12,7 +12,8 @@ param(
         "update",
         "update_and_restart",
         "kill_processes",
-        "json_status"
+        "json_status",
+        "restart_all_clean"
     )]
     [string]$Action
 )
@@ -134,11 +135,42 @@ function Get-RollJsonStatus {
 }
 
 function Stop-App {
-    Get-Process python -ErrorAction SilentlyContinue | Stop-Process -Force
+    Get-CimInstance Win32_Process |
+        Where-Object { $_.Name -eq "python.exe" -and $_.CommandLine -match "app\.py" } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 
 function Stop-Tunnel {
     Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
+}
+
+function Stop-Persistence {
+    Get-CimInstance Win32_Process |
+        Where-Object { $_.Name -eq "python.exe" -and $_.CommandLine -match "session_persistence" } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+
+function Stop-Collector {
+    Get-CimInstance Win32_Process |
+        Where-Object { $_.Name -eq "python.exe" -and $_.CommandLine -match "collector\.py" } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+
+function Stop-Browser {
+    Get-Process chrome, chromium, msedge -ErrorAction SilentlyContinue |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+}
+
+function Start-Persistence {
+    Start-Process -FilePath $Python -ArgumentList "$Root\app\session_persistence.py" -WorkingDirectory $Root
+}
+
+function Start-Collector {
+    $Config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+
+    if ($Config.run_global_collector -eq $true) {
+        Start-Process -FilePath $Python -ArgumentList "$Root\global\collector.py" -WorkingDirectory "$Root\global"
+    }
 }
 
 function Start-App {
@@ -230,5 +262,28 @@ switch ($Action) {
         Stop-Tunnel
         Get-Process chrome -ErrorAction SilentlyContinue | Stop-Process -Force
         Write-Host "Killed python, cloudflared, and chrome."
+    }
+
+    "restart_all_clean" {
+        Stop-Persistence
+        Stop-Collector
+        Stop-App
+        Stop-Tunnel
+        Stop-Browser
+
+        Start-Sleep -Seconds 3
+
+        Start-App
+        Start-Sleep -Seconds 2
+
+        Start-Tunnel
+        Start-Sleep -Seconds 2
+
+        Start-Persistence
+        Start-Sleep -Seconds 2
+
+        Start-Collector
+
+        Write-Host "Clean restart complete."
     }
 }
