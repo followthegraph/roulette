@@ -50,6 +50,29 @@ function Show-Status {
         Write-Host "Health check failed: $($_.Exception.Message)"
     }
 }
+function Get-GitExe {
+    $candidates = @(
+        "C:\Program Files\Git\bin\git.exe",
+        "C:\Program Files\Git\cmd\git.exe",
+        "C:\Program Files (x86)\Git\bin\git.exe",
+        "C:\Program Files (x86)\Git\cmd\git.exe",
+        "C:\Users\bp\AppData\Local\Programs\Git\cmd\git.exe",
+        "C:\Users\bp.BP\AppData\Local\Programs\Git\cmd\git.exe"
+    )
+
+    foreach ($path in $candidates) {
+        if (Test-Path $path) {
+            return $path
+        }
+    }
+
+    $cmd = Get-Command git.exe -ErrorAction SilentlyContinue
+    if ($cmd) {
+        return $cmd.Source
+    }
+
+    throw "git.exe not found. Install Git or add it to PATH."
+}
 
 function Get-RollJsonStatus {
     $root = "C:\Roll"
@@ -272,15 +295,17 @@ switch ($Action) {
     }
 
     "update" {
-        Push-Location $Root
-        git pull
+        $Git = Get-GitExe
+        Push-Location C:\Roll
+        & $Git pull
         Pop-Location
         Write-Host "Updated repo."
     }
 
     "update_and_restart" {
-        Push-Location $Root
-        git pull
+        $Git = Get-GitExe
+        Push-Location C:\Roll
+        & $Git pull
         Pop-Location
         Stop-App
         Stop-Tunnel
