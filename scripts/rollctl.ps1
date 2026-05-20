@@ -86,7 +86,7 @@ function Invoke-GitPull {
 
     Pop-Location
 
-    $output | ForEach-Object { Write-Host $_ }
+    $output | ForEach-Object { Write-Output $_ }
 
     if ($exitCode -ne 0) {
         throw "git pull failed with exit code $exitCode"

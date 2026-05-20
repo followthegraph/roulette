@@ -455,11 +455,16 @@ def admin_server_action(server_name, action):
 
     try:
         result = run_remote_action(server, action)
-        return jsonify({
-            "ok": result["ok"],
-            "stdout": result["stdout"],
-            "stderr": result["stderr"],
-        })
+        # return jsonify({
+        #     "ok": result["ok"],
+        #     "stdout": result["stdout"],
+        #     "stderr": result["stderr"],
+        # })
+        return {
+            "ok": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
