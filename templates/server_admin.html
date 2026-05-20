@@ -94,10 +94,29 @@
       color: #aaa;
       font-size: 13px;
     }
+
+    .message {
+        margin-bottom: 16px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        background: #202637;
+        color: #cbd3e3;
+    }
+
+    .message.ok {
+        background: #123d24;
+        color: #72f59a;
+    }
+
+    .message.bad {
+        background: #4a1616;
+        color: #ff8585;
+    }
   </style>
 </head>
 <body>
-  <h1>Roulette Server Dashboard</h1>
+  <h1>Roulette Admin Dashboard</h1>
+  <div id="message" class="message">Ready.</div>
   <div id="servers" class="grid"></div>
 
   <script>
@@ -114,20 +133,33 @@
     }
 
     async function runAction(server, action) {
-      const ok = confirm(`Run ${action} on ${server}?`);
-      if (!ok) return;
+        const ok = confirm(`Run ${action} on ${server}?`);
+        if (!ok) return;
 
-      const res = await fetch(`/admin/server-action/${server}/${action}`, {
-        method: "POST"
-      });
+        const msg = document.getElementById("message");
+        msg.className = "message";
+        msg.textContent = `Running ${action} on ${server}...`;
 
-      const data = await res.json();
+        const res = await fetch(`/admin/server-action/${server}/${action}`, {
+            method: "POST"
+        });
 
-      if (!data.ok) {
-        alert(`Action failed:\n${data.stderr || data.error || data.stdout}`);
-      }
+        const data = await res.json();
 
-      setTimeout(loadStatus, 2500);
+        if (!data.ok) {
+            msg.className = "message bad";
+            msg.textContent = `${server}: ${action} failed.`;
+            alert(`Action failed:\n${data.stderr || data.error || data.stdout}`);
+        } else {
+            msg.className = "message ok";
+            msg.textContent = `${server}: ${action} completed.`;
+
+            if (data.stdout) {
+            console.log(`${server} ${action}:`, data.stdout);
+            }
+        }
+
+        setTimeout(loadStatus, 2500);
     }
 
     async function loadStatus() {
@@ -179,11 +211,13 @@
             </div>
 
             <div>
-              <button onclick="runAction('${name}', 'restart_app')">Restart App</button>
-              <button onclick="runAction('${name}', 'restart_tunnel')">Restart Tunnel</button>
-              <button onclick="runAction('${name}', 'restart_persistence')">Restart Persistence</button>
-              ${collectorExpected ? `<button onclick="runAction('${name}', 'restart_collector')">Restart Collector</button>` : ""}
-              <button class="danger" onclick="runAction('${name}', 'restart_all_clean')">Clean Restart</button>
+                <button onclick="runAction('${name}', 'restart_app')">Restart App</button>
+                <button onclick="runAction('${name}', 'restart_tunnel')">Restart Tunnel</button>
+                <button onclick="runAction('${name}', 'restart_persistence')">Restart Persistence</button>
+                ${collectorExpected ? `<button onclick="runAction('${name}', 'restart_collector')">Restart Collector</button>` : ""}
+                <button onclick="runAction('${name}', 'update')">Git Pull</button>
+                <button class="danger" onclick="runAction('${name}', 'update_and_restart')">Update + Restart</button>
+                <button class="danger" onclick="runAction('${name}', 'restart_all_clean')">Clean Restart</button>
             </div>
 
             <p class="small">Port: ${status.port}</p>

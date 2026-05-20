@@ -437,6 +437,8 @@ ALLOWED_SERVER_ACTIONS = {
     "start_persistence", "restart_persistence",
     "start_collector", "restart_collector",
     "restart_all_clean",
+    "update",
+    "update_and_restart",
     "json_status",
 }
 
