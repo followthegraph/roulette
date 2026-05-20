@@ -190,8 +190,6 @@ def clear_attempts(ip):
         attempts.pop(ip)
         _save_state()
 
-import subprocess
-
 def get_remote_status(server):
     if server.get("local"):
         ps = r'powershell.exe -ExecutionPolicy Bypass -File "C:\Roll\scripts\rollctl.ps1" -Action json_status'
@@ -213,6 +211,34 @@ def get_remote_status(server):
         capture_output=True,
         text=True,
         timeout=30
+    )
+
+    return {
+        "ok": result.returncode == 0,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+    }
+
+def run_remote_action(server, action):
+    if server.get("local"):
+        ps = f'powershell.exe -ExecutionPolicy Bypass -File "C:\\Roll\\scripts\\rollctl.ps1" -Action {action}'
+    else:
+        ps = f"""
+        $Cred = Import-Clixml "{server['cred']}";
+        Invoke-Command -ComputerName {server['host']} `
+          -Credential $Cred `
+          -Authentication Negotiate `
+          -ScriptBlock {{
+            param($Action)
+            powershell.exe -ExecutionPolicy Bypass -File "C:\\Roll\\scripts\\rollctl.ps1" -Action $Action
+          }} -ArgumentList "{action}"
+        """
+
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", ps],
+        capture_output=True,
+        text=True,
+        timeout=60
     )
 
     return {
@@ -404,6 +430,36 @@ def global_latest():
     """)
 
     return jsonify(rows)
+
+ALLOWED_SERVER_ACTIONS = {
+    "start_app", "stop_app", "restart_app",
+    "start_tunnel", "stop_tunnel", "restart_tunnel",
+    "start_persistence", "restart_persistence",
+    "start_collector", "restart_collector",
+    "restart_all_clean",
+    "json_status",
+}
+
+@app.route("/admin/server-action/<server_name>/<action>", methods=["POST"])
+def admin_server_action(server_name, action):
+    if server_name not in REMOTE_SERVERS:
+        return jsonify({"ok": False, "error": "Unknown server"}), 404
+
+    if action not in ALLOWED_SERVER_ACTIONS:
+        return jsonify({"ok": False, "error": "Action not allowed"}), 400
+
+    server = REMOTE_SERVERS[server_name]
+
+    try:
+        result = run_remote_action(server, action)
+        return jsonify({
+            "ok": result["ok"],
+            "stdout": result["stdout"],
+            "stderr": result["stderr"],
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 
 @app.route("/admin/server-status")
 def admin_server_status():

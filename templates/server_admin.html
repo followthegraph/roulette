@@ -1,14 +1,99 @@
 <!doctype html>
 <html>
 <head>
-  <title>Server Admin</title>
+  <title>Roulette Server Admin</title>
   <style>
-    body { font-family: Arial; background:#111; color:#eee; padding:20px; }
-    .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:16px; }
-    .card { background:#1e1e1e; border-radius:12px; padding:16px; }
-    .ok { color:#7CFC98; }
-    .bad { color:#ff7070; }
-    pre { white-space:pre-wrap; font-size:12px; background:#000; padding:10px; border-radius:8px; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f1115;
+      color: #e8e8e8;
+      padding: 24px;
+    }
+
+    h1 {
+      margin-bottom: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      background: #1b1f2a;
+      border: 1px solid #2e3444;
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 8px 20px rgba(0,0,0,.25);
+    }
+
+    .card h2 {
+      margin: 0 0 8px;
+      text-transform: capitalize;
+    }
+
+    .status-line {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      color: #aaa;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: bold;
+      margin: 4px 4px 4px 0;
+    }
+
+    .ok { background: #123d24; color: #72f59a; }
+    .bad { background: #4a1616; color: #ff8585; }
+    .neutral { background: #333844; color: #cbd3e3; }
+
+    .services {
+      margin: 12px 0 16px;
+    }
+
+    button {
+      background: #2b65f6;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background: #477cff;
+    }
+
+    button.danger {
+      background: #b73535;
+    }
+
+    button.danger:hover {
+      background: #d64646;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      background: #090b10;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      max-height: 180px;
+      overflow: auto;
+    }
+
+    .small {
+      color: #aaa;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
@@ -16,6 +101,35 @@
   <div id="servers" class="grid"></div>
 
   <script>
+    function pill(label, obj, expected = true) {
+      if (!expected) {
+        return `<span class="pill neutral">${label}: N/A</span>`;
+      }
+
+      const running = obj && obj.running;
+      const count = obj && typeof obj.count !== "undefined" ? obj.count : "?";
+      const cls = running ? "ok" : "bad";
+
+      return `<span class="pill ${cls}">${label}: ${running ? "ON" : "OFF"} (${count})</span>`;
+    }
+
+    async function runAction(server, action) {
+      const ok = confirm(`Run ${action} on ${server}?`);
+      if (!ok) return;
+
+      const res = await fetch(`/admin/server-action/${server}/${action}`, {
+        method: "POST"
+      });
+
+      const data = await res.json();
+
+      if (!data.ok) {
+        alert(`Action failed:\n${data.stderr || data.error || data.stdout}`);
+      }
+
+      setTimeout(loadStatus, 2500);
+    }
+
     async function loadStatus() {
       const res = await fetch("/admin/server-status?t=" + Date.now());
       const data = await res.json();
@@ -23,13 +137,56 @@
       const root = document.getElementById("servers");
       root.innerHTML = "";
 
-      for (const [name, s] of Object.entries(data)) {
+      for (const [name, wrapper] of Object.entries(data)) {
+        let raw = wrapper.stdout || "{}";
+        let status = null;
+
+        try {
+          status = JSON.parse(raw);
+        } catch {
+          status = null;
+        }
+
+        if (!status) {
+          root.innerHTML += `
+            <div class="card">
+              <h2>${name}</h2>
+              <span class="pill bad">ERROR</span>
+              <pre>${wrapper.stderr || wrapper.stdout || "No output"}</pre>
+            </div>
+          `;
+          continue;
+        }
+
+        const collectorExpected = status.collector && status.collector.expected;
+
         root.innerHTML += `
           <div class="card">
             <h2>${name}</h2>
-            <p class="${s.ok ? "ok" : "bad"}">${s.ok ? "ONLINE" : "ERROR"}</p>
-            <p>Collector expected: ${s.collector_expected}</p>
-            <pre>${s.stdout || s.stderr}</pre>
+
+            <div class="status-line">
+              <span>${status.wheel_id || ""}</span>
+              <span>${status.checked_at || ""}</span>
+            </div>
+
+            <div class="services">
+              ${pill("App", status.app)}
+              ${pill("Tunnel", status.tunnel)}
+              ${pill("Persistence", status.persistence)}
+              ${pill("Browser", status.browser)}
+              ${pill("Collector", status.collector, collectorExpected)}
+              ${pill("Health", { running: status.health && status.health.ok, count: status.port })}
+            </div>
+
+            <div>
+              <button onclick="runAction('${name}', 'restart_app')">Restart App</button>
+              <button onclick="runAction('${name}', 'restart_tunnel')">Restart Tunnel</button>
+              <button onclick="runAction('${name}', 'restart_persistence')">Restart Persistence</button>
+              ${collectorExpected ? `<button onclick="runAction('${name}', 'restart_collector')">Restart Collector</button>` : ""}
+              <button class="danger" onclick="runAction('${name}', 'restart_all_clean')">Clean Restart</button>
+            </div>
+
+            <p class="small">Port: ${status.port}</p>
           </div>
         `;
       }
