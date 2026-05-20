@@ -73,15 +73,15 @@ function Get-RollJsonStatus {
     }
 
     $appProc = $procs | Where-Object {
-        $_.CommandLine -match "\\app\\app\.py|/app/app\.py"
+        $_.CommandLine -like "*app.py*"
     }
 
     $persistenceProc = $procs | Where-Object {
-        $_.CommandLine -match "\\app\\session_persistence\.py|/app/session_persistence\.py"
+        $_.CommandLine -like "*session_persistence.py*"
     }
 
     $collectorProc = $procs | Where-Object {
-        $_.CommandLine -match "\\global\\collector\.py|/global/collector\.py"
+        $_.CommandLine -like "*collector.py*"
     }
 
     $tunnelProc = $procs | Where-Object {
