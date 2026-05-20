@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+  <title>Server Admin</title>
+  <style>
+    body { font-family: Arial; background:#111; color:#eee; padding:20px; }
+    .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:16px; }
+    .card { background:#1e1e1e; border-radius:12px; padding:16px; }
+    .ok { color:#7CFC98; }
+    .bad { color:#ff7070; }
+    pre { white-space:pre-wrap; font-size:12px; background:#000; padding:10px; border-radius:8px; }
+  </style>
+</head>
+<body>
+  <h1>Roulette Server Dashboard</h1>
+  <div id="servers" class="grid"></div>
+
+  <script>
+    async function loadStatus() {
+      const res = await fetch("/admin/server-status");
+      const data = await res.json();
+
+      const root = document.getElementById("servers");
+      root.innerHTML = "";
+
+      for (const [name, s] of Object.entries(data)) {
+        root.innerHTML += `
+          <div class="card">
+            <h2>${name}</h2>
+            <p class="${s.ok ? "ok" : "bad"}">${s.ok ? "ONLINE" : "ERROR"}</p>
+            <p>Collector expected: ${s.collector_expected}</p>
+            <pre>${s.stdout || s.stderr}</pre>
+          </div>
+        `;
+      }
+    }
+
+    loadStatus();
+    setInterval(loadStatus, 15000);
+  </script>
+</body>
+</html>

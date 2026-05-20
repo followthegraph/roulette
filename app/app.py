@@ -34,6 +34,24 @@ load_dotenv(ENV_PATH, override=True)
 
 server_name = os.environ.get("SERVER_NAME", "unknown")
 
+REMOTE_SERVERS = {
+    "classic": {
+        "host": "BP-Classic",
+        "cred": r"C:\Roll\certs\classic-rouletteadmin.xml",
+        "collector": False,
+    },
+    "eu": {
+        "host": "BP-Euro0",
+        "cred": r"C:\Roll\certs\eu-rouletteadmin.xml",
+        "collector": True,
+    },
+    "flash": {
+        "host": "BP-EuroFlash",
+        "cred": r"C:\Roll\certs\flash-rouletteadmin.xml",
+        "collector": False,
+    },
+}
+
 config = {}
 if CONFIG_PATH.exists():
     with CONFIG_PATH.open("r", encoding="utf-8") as f:

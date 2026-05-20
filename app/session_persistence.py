@@ -193,9 +193,6 @@ def stats_visible(game_frame):
     except Exception:
         return False
     
-    
-
-
 # ----------------------------
 # Main
 # ----------------------------
