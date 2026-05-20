@@ -188,6 +188,32 @@ def clear_attempts(ip):
         attempts.pop(ip)
         _save_state()
 
+import subprocess
+
+def get_remote_status(server):
+    ps = f"""
+    $Cred = Import-Clixml "{server['cred']}";
+    Invoke-Command -ComputerName {server['host']} `
+      -Credential $Cred `
+      -Authentication Negotiate `
+      -ScriptBlock {{
+        powershell.exe -ExecutionPolicy Bypass -File "C:\\Roll\\scripts\\rollctl.ps1" -Action status
+      }}
+    """
+
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command", ps],
+        capture_output=True,
+        text=True,
+        timeout=30
+    )
+
+    return {
+        "ok": result.returncode == 0,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+    }
+
 # --- Utility JSON helpers ---
 def json_read(path: Path):
     with path.open("r", encoding="utf-8") as f:
@@ -372,7 +398,20 @@ def global_latest():
 
     return jsonify(rows)
 
-@app.route("/global-monitor")
+@app.route("/admin/server-status")
+def admin_server_status():
+    results = {}
+
+    for name, server in REMOTE_SERVERS.items():
+        results[name] = get_remote_status(server)
+        results[name]["collector_expected"] = server["collector"]
+
+    return jsonify(results)
+
+@app.route("/admin/servers")
+def admin_servers():
+    return render_template("server_admin.html")
+
 @app.route("/global-monitor")
 def global_monitor():
 
