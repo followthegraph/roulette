@@ -682,27 +682,6 @@ setTimeout(() => {
           else {
             td.textContent = value ?? "";
           }
-          if (key === "Bet Signal") {
-            const scoreInfo = scoreStrategyRow(row);
-
-            td.dataset.profileSignal = "1";
-            td.dataset.scoreBreakdown = scoreInfo.breakdown || "";
-            td.removeAttribute("title");
-
-            if (scoreInfo.score === null) {
-              td.textContent = "Unknown";
-            } else {
-              td.innerHTML = `
-                <span class="decision-score ${scoreInfo.className}">
-                  ${scoreInfo.score}
-                </span>
-                <span class="decision-label">${scoreInfo.label}</span>
-              `;
-            }
-
-          } else {
-            td.textContent = value ?? "";
-          }
 
           if (document.getElementById("highlightToggle").checked) {
             if (key === "Rolls Since Last Hit" && parseFloat(value) > 2 * parseFloat(row["Avg Delay"])) {
