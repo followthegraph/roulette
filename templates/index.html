@@ -305,7 +305,7 @@
       </div>
 
       <div id="strategyProfilePreview" class="strategy-profile-preview"></div>
-
+      <div id="scoreBreakdownTooltip" class="score-breakdown-tooltip"></div>  
       <div id="strategyProfileModal" class="strategy-profile-modal hidden">
         <div class="strategy-profile-modal-card">
           <div class="strategy-profile-modal-header">
@@ -669,8 +669,6 @@ setTimeout(() => {
             const scoreInfo = scoreStrategyRow(row);
 
             td.dataset.profileSignal = "1";
-
-            <div id="scoreBreakdownTooltip" class="score-breakdown-tooltip"></div>  
 
             if (scoreInfo.score === null) {
               td.textContent = "Unknown";
