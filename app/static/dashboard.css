@@ -514,3 +514,43 @@
     transform-origin: top center;
     min-height: 26px;
   }
+
+  .decision-score {
+    display: inline-block;
+    min-width: 34px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    font-weight: bold;
+    margin-right: 5px;
+  }
+  
+  .decision-label {
+    font-size: 11px;
+    color: #374151;
+    font-weight: bold;
+  }
+  
+  .score-strong {
+    background: #dc2626;
+    color: white;
+  }
+  
+  .score-watch {
+    background: #f97316;
+    color: white;
+  }
+  
+  .score-early {
+    background: #facc15;
+    color: #111827;
+  }
+  
+  .score-wait {
+    background: #dcfce7;
+    color: #166534;
+  }
+  
+  .score-unknown {
+    background: #e5e7eb;
+    color: #6b7280;
+  }

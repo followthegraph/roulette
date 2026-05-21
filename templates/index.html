@@ -665,8 +665,23 @@ setTimeout(() => {
           else {
             td.textContent = value ?? "";
           }
-          if (key === "Bet Signal" && value === "? Consider betting") {
-            td.classList.add("highlight");
+          if (key === "Bet Signal") {
+            const scoreInfo = scoreStrategyRow(row);
+
+            if (scoreInfo.score === null) {
+              td.textContent = "Unknown";
+            } else {
+              td.innerHTML = `
+                <span class="decision-score ${scoreInfo.className}">
+                  ${scoreInfo.score}
+                </span>
+                <span class="decision-label">${scoreInfo.label}</span>
+              `;
+            }
+
+            td.title = `Old signal: ${value || "—"}`;
+          } else {
+            td.textContent = value ?? "";
           }
 
           if (document.getElementById("highlightToggle").checked) {
@@ -2631,6 +2646,54 @@ function renderProfilePreview(profile) {
     Std Dev: ${profile.stddev_delay ?? "—"}
   `;
 }
+function scoreStrategyRow(row) {
+  const rollsSince = Number(row["Adjusted Rolls Since Last Hit"] || row["Rolls Since Last Hit"]);
+  const maxDelay = Number(row["Max Delay"]);
+  const avgDelay = Number(row["Avg Delay"]);
+  const risk = parseMoneyValue(row["Adjusted Martingale Risk"] || row["Martingale Risk"]);
+
+  if (!Number.isFinite(rollsSince) || !Number.isFinite(maxDelay) || maxDelay <= 0) {
+    return { score: null, label: "Unknown", className: "score-unknown" };
+  }
+
+  const pctOfMax = Math.min(1.25, rollsSince / maxDelay);
+  const avgPressure = Number.isFinite(avgDelay) && avgDelay > 0
+    ? Math.min(1.25, rollsSince / avgDelay)
+    : 0;
+
+  let percentileComponent = Math.min(50, pctOfMax * 50);
+  let pressureComponent = Math.min(30, avgPressure * 12);
+
+  let riskComponent = 20;
+  if (Number.isFinite(risk)) {
+    if (risk > 1500) riskComponent = 0;
+    else if (risk > 1000) riskComponent = 5;
+    else if (risk > 500) riskComponent = 10;
+    else if (risk > 250) riskComponent = 15;
+  }
+
+  const score = Math.round(
+    Math.min(100, percentileComponent + pressureComponent + riskComponent)
+  );
+
+  let label = "Wait";
+  let className = "score-wait";
+
+  if (score >= 80) {
+    label = "Strong";
+    className = "score-strong";
+  } else if (score >= 65) {
+    label = "Watch";
+    className = "score-watch";
+  } else if (score >= 50) {
+    label = "Early";
+    className = "score-early";
+  }
+
+  return { score, label, className };
+}
+
+
 
 function attachStrategyProfileHandlers() {
   document.querySelectorAll(
