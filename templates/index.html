@@ -669,6 +669,8 @@ setTimeout(() => {
             const scoreInfo = scoreStrategyRow(row);
 
             td.dataset.profileSignal = "1";
+            td.dataset.scoreBreakdown = scoreInfo.breakdown || "";
+            td.removeAttribute("title");
 
             if (scoreInfo.score === null) {
               td.textContent = "Unknown";
@@ -681,7 +683,6 @@ setTimeout(() => {
               `;
             }
 
-            td.title = scoreInfo.breakdown;
           } else {
             td.textContent = value ?? "";
           }
@@ -2775,7 +2776,7 @@ function attachStrategyProfileHandlers() {
           );
         }
 
-        preview.style.left = `${Math.min(window.innerWidth - 340, e.clientX + 14)}px`;
+        preview.style.left = `${Math.min(window.innerWidth - 440, e.clientX + 14)}px`;
         preview.style.top = `${Math.min(window.innerHeight - 180, e.clientY + 14)}px`;
         preview.style.display = "block";
       } catch (err) {
