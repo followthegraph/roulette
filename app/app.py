@@ -593,7 +593,7 @@ def receive_data():
             return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/global-summary")
-@admin_required
+# @admin_required
 def global_summary():
     rows = global_db_rows("""
         SELECT
@@ -611,7 +611,7 @@ def global_summary():
 
 
 @app.route("/global-latest")
-@admin_required
+# @admin_required
 def global_latest():
     rows = global_db_rows("""
         SELECT
@@ -779,7 +779,7 @@ def global_monitor():
     return jsonify(results)
 
 @app.route("/strategy-profile")
-@admin_required
+# @admin_required
 def strategy_profile():
     import statistics
     import math
@@ -876,7 +876,7 @@ def strategy_profile():
     return jsonify(profile)
 
 @app.route("/global-roll-timing")
-@admin_required
+# @admin_required
 def global_roll_timing():
 
     rows = global_db_rows("""
