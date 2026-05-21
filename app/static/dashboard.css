@@ -572,3 +572,8 @@
     box-shadow: 0 12px 30px rgba(0,0,0,.28);
     pointer-events: none;
   }
+
+  .score-extreme {
+    background: #7f1d1d;
+    color: white;
+  }

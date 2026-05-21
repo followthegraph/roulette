@@ -2663,11 +2663,19 @@ function renderProfilePreview(profile, scoreBreakdown = "") {
   `;
 }
 function scoreStrategyRow(row) {
-  const rollsSince = Number(row["Adjusted Rolls Since Last Hit"] || row["Rolls Since Last Hit"]);
   const rawRollsSince = Number(row["Rolls Since Last Hit"]);
   const adjustedRollsSince = Number(row["Adjusted Rolls Since Last Hit"]);
-  const maxDelay = Number(row["Max Delay"]);
+  const rollsSince = Number.isFinite(adjustedRollsSince)
+    ? adjustedRollsSince
+    : rawRollsSince;
+
   const avgDelay = Number(row["Avg Delay"]);
+  const maxDelay = Number(row["Max Delay"]);
+  const p90 = Number(row["P90 Delay"]);
+  const p95 = Number(row["P95 Delay"]);
+  const p99 = Number(row["P99 Delay"]);
+  const currentPercentile = Number(row["Current Percentile"]);
+
   const risk = parseMoneyValue(row["Adjusted Martingale Risk"] || row["Martingale Risk"]);
 
   if (!Number.isFinite(rollsSince) || !Number.isFinite(maxDelay) || maxDelay <= 0) {
@@ -2679,13 +2687,26 @@ function scoreStrategyRow(row) {
     };
   }
 
-  const pctOfMax = Math.min(1.25, rollsSince / maxDelay);
-  const avgPressure = Number.isFinite(avgDelay) && avgDelay > 0
-    ? Math.min(1.25, rollsSince / avgDelay)
-    : 0;
+  let percentileComponent = 0;
 
-  const percentileComponent = Math.min(50, pctOfMax * 50);
-  const pressureComponent = Math.min(30, avgPressure * 12);
+  if (Number.isFinite(currentPercentile)) {
+    percentileComponent = Math.min(45, (currentPercentile / 100) * 45);
+  } else if (Number.isFinite(p99) && rollsSince >= p99) {
+    percentileComponent = 45;
+  } else if (Number.isFinite(p95) && rollsSince >= p95) {
+    percentileComponent = 35;
+  } else if (Number.isFinite(p90) && rollsSince >= p90) {
+    percentileComponent = 25;
+  } else if (Number.isFinite(p90) && p90 > 0) {
+    percentileComponent = Math.min(20, (rollsSince / p90) * 20);
+  }
+
+  const maxPressure = Math.min(20, (rollsSince / maxDelay) * 20);
+
+  const avgPressure =
+    Number.isFinite(avgDelay) && avgDelay > 0
+      ? Math.min(15, (rollsSince / avgDelay) * 4)
+      : 0;
 
   let riskComponent = 20;
   let riskText = "Risk unknown/blank: +20";
@@ -2709,13 +2730,16 @@ function scoreStrategyRow(row) {
   }
 
   const score = Math.round(
-    Math.min(100, percentileComponent + pressureComponent + riskComponent)
+    Math.min(100, percentileComponent + maxPressure + avgPressure + riskComponent)
   );
 
   let label = "Wait";
   let className = "score-wait";
 
-  if (score >= 80) {
+  if (score >= 90) {
+    label = "Extreme";
+    className = "score-extreme";
+  } else if (score >= 80) {
     label = "Strong";
     className = "score-strong";
   } else if (score >= 65) {
@@ -2728,17 +2752,27 @@ function scoreStrategyRow(row) {
 
   const breakdown = [
     `Decision Score: ${score} (${label})`,
-    // ``,
-    // `Rolls Since: ${rawRollsSince}`,
-    // Number.isFinite(adjustedRollsSince) ? `Adjusted Rolls Since: ${adjustedRollsSince}` : null,
-    // `Used Rolls Since: ${rollsSince}`,
-    // `Avg Delay: ${Number.isFinite(avgDelay) ? avgDelay : "—"}`,
-    // `Max Delay: ${maxDelay}`,
     ``,
-    `Max-delay pressure: ${(pctOfMax * 100).toFixed(1)}% of max -> +${percentileComponent.toFixed(1)} / 50`,
-    `Avg-delay pressure: ${Number.isFinite(avgDelay) && avgDelay > 0 ? avgPressure.toFixed(2) + "x avg" : "—"} -> +${pressureComponent.toFixed(1)} / 30`,
+    `Raw Rolls Since: ${Number.isFinite(rawRollsSince) ? rawRollsSince : "—"}`,
+    `Adjusted Rolls Since: ${Number.isFinite(adjustedRollsSince) ? adjustedRollsSince : "—"}`,
+    `Used Rolls Since: ${rollsSince}`,
+    ``,
+    `Avg Delay: ${Number.isFinite(avgDelay) ? avgDelay : "—"}`,
+    `Max Delay: ${Number.isFinite(maxDelay) ? maxDelay : "—"}`,
+    `P90: ${Number.isFinite(p90) ? p90 : "—"}`,
+    `P95: ${Number.isFinite(p95) ? p95 : "—"}`,
+    `P99: ${Number.isFinite(p99) ? p99 : "—"}`,
+    `Current Percentile: ${Number.isFinite(currentPercentile) ? currentPercentile + "%" : "—"}`,
+    ``,
+    `Percentile pressure: +${percentileComponent.toFixed(1)} / 45`,
+    `Max-delay pressure: ${((rollsSince / maxDelay) * 100).toFixed(1)}% of max -> +${maxPressure.toFixed(1)} / 20`,
+    `Avg-delay pressure: ${
+      Number.isFinite(avgDelay) && avgDelay > 0
+        ? (rollsSince / avgDelay).toFixed(2) + "x avg"
+        : "—"
+    } -> +${avgPressure.toFixed(1)} / 15`,
     `${riskText} / 20`,
-  ].filter(Boolean).join("\n");
+  ].join("\n");
 
   return { score, label, className, breakdown };
 }

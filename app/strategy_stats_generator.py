@@ -330,7 +330,27 @@ def generate_strategy_stats(
         hits = df_with_index[df_with_index["number"].isin(numbers)].sort_values("Index")
         indices = hits["Index"].tolist()
         delays = [j - i for i, j in zip(indices[:-1], indices[1:])]
+        def percentile(values, p):
+            if not values:
+                return None
 
+            values = sorted(values)
+            k = (len(values) - 1) * (p / 100)
+            f = int(k)
+            c = min(f + 1, len(values) - 1)
+
+            if f == c:
+                return values[f]
+
+            return values[f] * (c - k) + values[c] * (k - f)
+
+
+        def current_percentile(values, current):
+            if not values or current is None:
+                return None
+
+            below_or_equal = sum(1 for v in values if v <= current)
+            return round((below_or_equal / len(values)) * 100, 2)
         last_hit_index = indices[-1] if indices else None
         raw_rolls_since = latest_index - last_hit_index if last_hit_index is not None else None
         adjusted_rolls_since = calculate_adjusted_rolls_since_last_hit(
@@ -345,6 +365,10 @@ def generate_strategy_stats(
             "Avg Delay": round(sum(delays) / len(delays), 2) if delays else None,
             "Min Delay": min(delays) if delays else None,
             "Max Delay": max(delays) if delays else None,
+            "P90 Delay": round(percentile(delays, 90), 2) if delays else None,
+            "P95 Delay": round(percentile(delays, 95), 2) if delays else None,
+            "P99 Delay": round(percentile(delays, 99), 2) if delays else None,
+            "Current Percentile": current_percentile(delays, adjusted_rolls_since),
             "Last Hit Index": last_hit_index,
             "Rolls Since Last Hit": raw_rolls_since,
             "Adjusted Rolls Since Last Hit": adjusted_rolls_since,
@@ -352,9 +376,19 @@ def generate_strategy_stats(
 
     stats_results = all_bets_df.copy()
     stats_results[
-        ["Avg Delay", "Min Delay", "Max Delay", "Last Hit Index", "Rolls Since Last Hit", "Adjusted Rolls Since Last Hit"]
+        [
+            "Avg Delay",
+            "Min Delay",
+            "Max Delay",
+            "P90 Delay",
+            "P95 Delay",
+            "P99 Delay",
+            "Current Percentile",
+            "Last Hit Index",
+            "Rolls Since Last Hit",
+            "Adjusted Rolls Since Last Hit",
+        ]
     ] = all_bets_df["Numbers"].apply(lambda nums: pd.Series(calculate_delays(nums, df)))
-
     def bet_signal(row):
         try:
             if pd.notna(row["Rolls Since Last Hit"]) and pd.notna(row["Avg Delay"]):
