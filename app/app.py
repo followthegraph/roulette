@@ -353,6 +353,38 @@ def json_write(path: Path, data):
     with path.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
+def get_global_rolls_for_stats(wheel_id, window="500"):
+    params = [wheel_id]
+    limit_clause = ""
+
+    if str(window).lower() != "all":
+        try:
+            limit = max(1, int(window))
+        except Exception:
+            limit = 500
+
+        limit_clause = "LIMIT ?"
+        params.append(limit)
+
+    rows = global_db_rows(f"""
+        SELECT number, color, seq, created_at_utc
+        FROM wheel_rolls
+        WHERE wheel_id = ?
+        ORDER BY seq DESC
+        {limit_clause}
+    """, tuple(params))
+
+    # strategy generator expects newest-first, same as roulette_data.json
+    return [
+        {
+            "number": int(r["number"]),
+            "color": r.get("color", ""),
+            "seq": r.get("seq"),
+            "created_at_utc": r.get("created_at_utc"),
+        }
+        for r in rows
+    ]
+
 def global_db_rows(query, params=()):
     import sqlite3
 
@@ -537,6 +569,59 @@ def get_roulette_data():
     data = json_read(ROULETTE_JSON)
     return jsonify(data)
 
+@app.route("/stats-window.json")
+def stats_window():
+    import tempfile
+    from strategy_stats_generator import generate_strategy_stats
+
+    wheel_id = request.args.get("wheel_id") or WHEEL_ID
+    window = request.args.get("window", "500")
+
+    rolls = get_global_rolls_for_stats(wheel_id, window)
+
+    if not rolls:
+        return jsonify([])
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".json",
+        delete=False,
+        encoding="utf-8"
+    ) as jf:
+        json.dump(rolls, jf)
+        temp_json_path = jf.name
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".csv",
+        delete=False,
+        encoding="utf-8"
+    ) as cf:
+        temp_csv_path = cf.name
+
+    try:
+        generate_strategy_stats(temp_json_path, temp_csv_path)
+
+        df = pd.read_csv(temp_csv_path).fillna("")
+        records = df.to_dict(orient="records")
+
+        for r in records:
+            r["Stats Window"] = window
+            r["Wheel ID"] = wheel_id
+            r["Stats Source"] = "global_rolls.sqlite"
+
+        return jsonify(records)
+
+    finally:
+        try:
+            os.remove(temp_json_path)
+        except Exception:
+            pass
+
+        try:
+            os.remove(temp_csv_path)
+        except Exception:
+            pass
 
 @app.route("/stats_all.json")
 def stats_all():

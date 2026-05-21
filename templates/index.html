@@ -48,6 +48,16 @@
       </div>
     </div>
 
+    <div>
+      <label for="statsWindowSelect"><b>Stats Window:</b></label><br>
+      <select id="statsWindowSelect" style="width:160px;">
+        <option value="500" selected>Last 500</option>
+        <option value="1000">Last 1000</option>
+        <option value="2500">Last 2500</option>
+        <option value="all">All DB</option>
+      </select>
+    </div>
+
     <div class="highlight-toggle" style="display:none;">
       <label><input type="checkbox" id="highlightToggle" checked> Enable Streak
         Highlights</label>
@@ -431,9 +441,13 @@ let allData = [];
 
     async function fetchData() {
       const timestamp = new Date().getTime();
-      const source = document.getElementById("dataSourceToggle").value;
+      const wheelId = getCurrentWheelId();
+      const statsWindow = document.getElementById("statsWindowSelect")?.value || "500";
 
-      const stats = await fetch(`/${source}?t=${timestamp}`).then(res => res.json());
+      const stats = await fetch(
+        `https://eu.getdatbp.com/stats-window.json?wheel_id=${encodeURIComponent(wheelId)}&window=${encodeURIComponent(statsWindow)}&t=${timestamp}`
+      ).then(res => res.json());
+
       allData = stats;
 
       const rolls = await fetch(`/roulette_data.json?t=${timestamp}`).then(r => r.json());
@@ -878,9 +892,9 @@ setTimeout(() => {
         resetHeatboxStyles();
       });
 
-
-
-
+      document.getElementById("statsWindowSelect")?.addEventListener("change", () => {
+        fetchData();
+      });
 
 //
 
