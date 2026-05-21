@@ -652,11 +652,7 @@ setTimeout(() => {
             const raw = Number(row["Rolls Since Last Hit"]);
             const adjusted = Number(row["Adjusted Rolls Since Last Hit"]);
 
-            if (
-              Number.isFinite(raw) &&
-              Number.isFinite(adjusted) &&
-              adjusted !== raw
-            ) {
+            if (Number.isFinite(raw) && Number.isFinite(adjusted) && adjusted !== raw) {
               td.innerHTML = `${raw} <span class="adjusted-value">(${adjusted})</span>`;
               td.title = `Raw: ${raw} | Adjusted: ${adjusted} | Adjustment Applied: ${raw - adjusted}`;
             } else {
