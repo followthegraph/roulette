@@ -1,9 +1,10 @@
-from flask import Flask, request, jsonify, render_template, redirect, session
+from flask import Flask, request, jsonify, render_template, redirect, session, url_for
 from flask_cors import CORS
 from dotenv import load_dotenv
 from werkzeug.middleware.proxy_fix import ProxyFix
 from pathlib import Path
 from datetime import datetime, timezone
+from functools import wraps
 import subprocess
 import threading
 import requests
@@ -35,6 +36,15 @@ URGENCY_SNAPSHOT_JSON = DATA_DIR / "urgency_snapshot.json"
 load_dotenv(ENV_PATH, override=True)
 
 server_name = os.environ.get("SERVER_NAME", "unknown")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("admin_logged_in"):
+            return redirect(url_for("admin_login"))
+        return f(*args, **kwargs)
+    return decorated
 
 REMOTE_SERVERS = {
     "classic": {
@@ -71,6 +81,12 @@ app = Flask(
 )
 # Set a secret key for sessions (set via env var in production)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-me-in-prod")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    PERMANENT_SESSION_LIFETIME=86400,
+)
 CORS(app)
 
 # Trust proxy headers for real client IP when behind nginx/Cloudflare
@@ -353,6 +369,14 @@ def global_db_rows(query, params=()):
     conn.close()
     return rows
 
+@app.after_request
+def add_security_headers(resp):
+    resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["Referrer-Policy"] = "same-origin"
+    return resp
+
 # --- Routes ---
 @app.route("/")
 def index():
@@ -369,6 +393,101 @@ def index():
 def logout():
     session.clear()
     return redirect("/")
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    error = None
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+
+        if password == ADMIN_PASSWORD:
+            session["admin_logged_in"] = True
+            return redirect("/admin")
+        else:
+            error = "Invalid password"
+
+    return f"""
+    <html>
+    <head>
+        <title>Roulette Admin Login</title>
+        <style>
+            body {{
+                font-family: Arial;
+                background: #111827;
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                margin: 0;
+            }}
+
+            .card {{
+                background: #1f2937;
+                padding: 32px;
+                border-radius: 16px;
+                width: 320px;
+                box-shadow: 0 10px 40px rgba(0,0,0,.4);
+            }}
+
+            input {{
+                width: 100%;
+                padding: 12px;
+                margin-top: 12px;
+                border-radius: 10px;
+                border: 1px solid #374151;
+                background: #111827;
+                color: white;
+            }}
+
+            button {{
+                width: 100%;
+                padding: 12px;
+                margin-top: 16px;
+                border: 0;
+                border-radius: 10px;
+                background: #2563eb;
+                color: white;
+                font-weight: bold;
+                cursor: pointer;
+            }}
+
+            .error {{
+                color: #f87171;
+                margin-top: 10px;
+            }}
+        </style>
+    </head>
+
+    <body>
+        <div class="card">
+            <h2>Roulette Admin</h2>
+
+            <form method="POST">
+                <input
+                    type="password"
+                    name="password"
+                    placeholder="Password"
+                    autofocus
+                />
+
+                <button type="submit">
+                    Login
+                </button>
+            </form>
+
+            {f'<div class="error">{error}</div>' if error else ''}
+        </div>
+    </body>
+    </html>
+    """
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.clear()
+    return redirect("/admin/login")
+
 
 @app.route("/check-password", methods=["POST"])
 def check_password():
@@ -474,6 +593,7 @@ def receive_data():
             return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/global-summary")
+@admin_required
 def global_summary():
     rows = global_db_rows("""
         SELECT
@@ -491,6 +611,7 @@ def global_summary():
 
 
 @app.route("/global-latest")
+@admin_required
 def global_latest():
     rows = global_db_rows("""
         SELECT
@@ -524,6 +645,7 @@ ALLOWED_SERVER_ACTIONS = {
 }
 
 @app.route("/admin/server-action/<server_name>/<action>", methods=["POST"])
+@admin_required
 def admin_server_action(server_name, action):
     if server_name not in REMOTE_SERVERS:
         return jsonify({"ok": False, "error": "Unknown server"}), 404
@@ -543,8 +665,8 @@ def admin_server_action(server_name, action):
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
-
 @app.route("/admin/server-status")
+@admin_required
 def admin_server_status():
     results = {}
 
@@ -555,10 +677,12 @@ def admin_server_status():
     return jsonify(results)
 
 @app.route("/admin/servers")
+@admin_required
 def admin_servers():
     return render_template("server_admin.html")
 
 @app.route("/global-monitor")
+@admin_required
 def global_monitor():
 
     rows = global_db_rows("""
@@ -655,6 +779,7 @@ def global_monitor():
     return jsonify(results)
 
 @app.route("/strategy-profile")
+@admin_required
 def strategy_profile():
     import statistics
     import math
@@ -751,6 +876,7 @@ def strategy_profile():
     return jsonify(profile)
 
 @app.route("/global-roll-timing")
+@admin_required
 def global_roll_timing():
 
     rows = global_db_rows("""
