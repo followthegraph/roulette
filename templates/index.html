@@ -670,6 +670,8 @@ setTimeout(() => {
 
             td.dataset.profileSignal = "1";
 
+            <div id="scoreBreakdownTooltip" class="score-breakdown-tooltip"></div>  
+
             if (scoreInfo.score === null) {
               td.textContent = "Unknown";
             } else {
@@ -2749,7 +2751,20 @@ function attachStrategyProfileHandlers() {
 
     signalCell.dataset.profileBound = "1";
     signalCell.style.cursor = "help";
-    signalCell.title = "Hover for stats; click for full profile";
+    // signalCell.title = "Hover for stats; click for full profile";
+
+    signalCell.addEventListener("mousemove", (e) => {
+      const tip = document.getElementById("scoreBreakdownTooltip");
+      if (!tip) return;
+
+      const text = signalCell.dataset.scoreBreakdown || "";
+      if (!text) return;
+
+      tip.textContent = text;
+      tip.style.left = `${Math.min(window.innerWidth - 380, e.clientX + 16)}px`;
+      tip.style.top = `${Math.min(window.innerHeight - 260, e.clientY + 16)}px`;
+      tip.style.display = "block";
+    });
 
     signalCell.addEventListener("mouseenter", async (e) => {
       if (window.innerWidth < 900) return;
@@ -2773,9 +2788,12 @@ function attachStrategyProfileHandlers() {
         preview.style.display = "block";
       }
     });
-
+    
     signalCell.addEventListener("mouseleave", () => {
       document.getElementById("strategyProfilePreview").style.display = "none";
+
+      const tip = document.getElementById("scoreBreakdownTooltip");
+      if (tip) tip.style.display = "none";
     });
 
     signalCell.addEventListener("click", async () => {
