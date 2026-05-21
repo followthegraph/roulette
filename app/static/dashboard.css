@@ -38,7 +38,7 @@
   
   #heatmap {
     position: sticky;
-    top: 92px;
+    top: 102px;
     z-index: 2500;
     background: white;
     padding: 6px 0;
@@ -50,7 +50,7 @@
   }
   
   body.scrolled #heatmap {
-    max-height: 62px;
+    max-height: 50px;
   }
   
   body:not(.scrolled) #heatmap {
