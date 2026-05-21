@@ -404,7 +404,7 @@ def admin_login():
         if password == ADMIN_PASSWORD:
             session.permanent = True
             session["admin_auth"] = ADMIN_PASSWORD
-            return redirect("/admin")
+            return redirect("/ops/control-center")
         else:
             error = "Invalid password"
 
