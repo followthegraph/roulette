@@ -668,6 +668,8 @@ setTimeout(() => {
           if (key === "Bet Signal") {
             const scoreInfo = scoreStrategyRow(row);
 
+            td.dataset.profileSignal = "1";
+
             if (scoreInfo.score === null) {
               td.textContent = "Unknown";
             } else {
@@ -2737,8 +2739,7 @@ function attachStrategyProfileHandlers() {
     let signalCell = null;
 
     Array.from(row.cells).forEach(cell => {
-      const txt = cell.textContent.trim();
-      if (txt.includes("Consider betting") || txt.includes("Wait")) {
+      if (cell.dataset.profileSignal === "1") {
         signalCell = cell;
       }
     });
