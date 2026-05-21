@@ -640,28 +640,49 @@ setTimeout(() => {
         keys.forEach(key => {
           const td = document.createElement("td");
           let value = row[key];
-          if (key === "Betting Strategy" && value.startsWith("'")) value = value.substring(1);
-          if (key === "Betting Strategy") value = displayStrategyName(value);
+          if (key === "Betting Strategy" && value.startsWith("'")) {
+            value = value.substring(1);
+          }
+
+          if (key === "Betting Strategy") {
+            value = displayStrategyName(value);
+          }
+
           if (key === "Rolls Since Last Hit") {
             const raw = Number(row["Rolls Since Last Hit"]);
-            const adjustedRemaining = Number(row["Adjusted Rolls Since Last Hit"]);
+            const adjusted = Number(row["Adjusted Rolls Since Last Hit"]);
 
-            const adjustmentAmount =
+            if (
               Number.isFinite(raw) &&
-              Number.isFinite(adjustedRemaining)
-                ? Math.max(0, raw - adjustedRemaining)
-                : null;
-
-                if (
-                  adjustmentAmount !== null &&
-                  adjustmentAmount > 0
-                ) {
-                  td.innerHTML = `${raw} <span class="adjusted-value">(${adjustedRemaining})</span>`;
-                  td.title = `Raw: ${raw} | Adjusted: ${adjustedRemaining} | Adjustment Applied: ${raw - adjustedRemaining}`;
-                } else {
-                  td.textContent = raw ?? "";
-                }
+              Number.isFinite(adjusted) &&
+              adjusted !== raw
+            ) {
+              td.innerHTML = `${raw} <span class="adjusted-value">(${adjusted})</span>`;
+              td.title = `Raw: ${raw} | Adjusted: ${adjusted} | Adjustment Applied: ${raw - adjusted}`;
+            } else {
+              td.textContent = Number.isFinite(raw) ? raw : "";
+            }
           }
+
+          else if (key === "Bet Signal") {
+            const scoreInfo = scoreStrategyRow(row);
+
+            td.dataset.profileSignal = "1";
+            td.dataset.scoreBreakdown = scoreInfo.breakdown || "";
+            td.removeAttribute("title");
+
+            if (scoreInfo.score === null) {
+              td.textContent = "Unknown";
+            } else {
+              td.innerHTML = `
+                <span class="decision-score ${scoreInfo.className}">
+                  ${scoreInfo.score}
+                </span>
+                <span class="decision-label">${scoreInfo.label}</span>
+              `;
+            }
+          }
+
           else {
             td.textContent = value ?? "";
           }
@@ -736,11 +757,20 @@ setTimeout(() => {
             ? Math.max(0, rawRiskNum - adjustedRiskNum)
             : null;
 
-        const riskDisplay =
-        riskReduction && riskReduction > 0
-          ? `${rawRisk} <span class="adjusted-value">(-$${riskReduction.toLocaleString()})</span>`
-          : rawRisk;
-
+            // uncommment and comment the other if this view is preferred
+            // const riskDisplay =
+            //   Number.isFinite(adjustedRiskNum) &&
+            //   Number.isFinite(rawRiskNum) &&
+            //   adjustedRiskNum !== rawRiskNum
+            //     ? `${rawRisk} <span class="adjusted-value">(${adjustedRisk})</span>`
+            //     : (adjustedRisk || rawRisk || "");
+            const riskDisplay =
+              Number.isFinite(adjustedRiskNum) &&
+              Number.isFinite(rawRiskNum) &&
+              adjustedRiskNum !== rawRiskNum
+                ? `${adjustedRisk} <span class="adjusted-value">(${rawRisk} raw)</span>`
+                : (adjustedRisk || rawRisk || "");
+                
         riskSpan.innerHTML = riskDisplay || "";
 
         const progressionBadge = document.createElement("span");
