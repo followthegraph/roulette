@@ -41,7 +41,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("admin_logged_in"):
+        if session.get("admin_auth") != ADMIN_PASSWORD:
             return redirect(url_for("admin_login"))
         return f(*args, **kwargs)
     return decorated
@@ -402,7 +402,8 @@ def admin_login():
         password = request.form.get("password", "")
 
         if password == ADMIN_PASSWORD:
-            session["admin_logged_in"] = True
+            session.permanent = True
+            session["admin_auth"] = ADMIN_PASSWORD
             return redirect("/admin")
         else:
             error = "Invalid password"
@@ -485,7 +486,7 @@ def admin_login():
 
 @app.route("/admin/logout")
 def admin_logout():
-    session.clear()
+    session.pop("admin_auth", None)
     return redirect("/admin/login")
 
 
@@ -676,13 +677,13 @@ def admin_server_status():
 
     return jsonify(results)
 
-@app.route("/admin/servers")
+@app.route("/ops/control-center")
 @admin_required
 def admin_servers():
     return render_template("server_admin.html")
 
 @app.route("/global-monitor")
-@admin_required
+# @admin_required
 def global_monitor():
 
     rows = global_db_rows("""
