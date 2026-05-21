@@ -50,7 +50,7 @@
   }
   
   body.scrolled #heatmap {
-    max-height: 50px;
+    max-height: 62px;
   }
   
   body:not(.scrolled) #heatmap {
