@@ -679,7 +679,7 @@ setTimeout(() => {
               `;
             }
 
-            td.title = `Old signal: ${value || "—"}`;
+            td.title = scoreInfo.breakdown;
           } else {
             td.textContent = value ?? "";
           }
@@ -2648,12 +2648,19 @@ function renderProfilePreview(profile) {
 }
 function scoreStrategyRow(row) {
   const rollsSince = Number(row["Adjusted Rolls Since Last Hit"] || row["Rolls Since Last Hit"]);
+  const rawRollsSince = Number(row["Rolls Since Last Hit"]);
+  const adjustedRollsSince = Number(row["Adjusted Rolls Since Last Hit"]);
   const maxDelay = Number(row["Max Delay"]);
   const avgDelay = Number(row["Avg Delay"]);
   const risk = parseMoneyValue(row["Adjusted Martingale Risk"] || row["Martingale Risk"]);
 
   if (!Number.isFinite(rollsSince) || !Number.isFinite(maxDelay) || maxDelay <= 0) {
-    return { score: null, label: "Unknown", className: "score-unknown" };
+    return {
+      score: null,
+      label: "Unknown",
+      className: "score-unknown",
+      breakdown: "Score unavailable: missing rolls since hit or max delay."
+    };
   }
 
   const pctOfMax = Math.min(1.25, rollsSince / maxDelay);
@@ -2661,15 +2668,28 @@ function scoreStrategyRow(row) {
     ? Math.min(1.25, rollsSince / avgDelay)
     : 0;
 
-  let percentileComponent = Math.min(50, pctOfMax * 50);
-  let pressureComponent = Math.min(30, avgPressure * 12);
+  const percentileComponent = Math.min(50, pctOfMax * 50);
+  const pressureComponent = Math.min(30, avgPressure * 12);
 
   let riskComponent = 20;
+  let riskText = "Risk unknown/blank: +20";
+
   if (Number.isFinite(risk)) {
-    if (risk > 1500) riskComponent = 0;
-    else if (risk > 1000) riskComponent = 5;
-    else if (risk > 500) riskComponent = 10;
-    else if (risk > 250) riskComponent = 15;
+    if (risk > 1500) {
+      riskComponent = 0;
+      riskText = `Risk $${risk.toLocaleString()} > $1,500: +0`;
+    } else if (risk > 1000) {
+      riskComponent = 5;
+      riskText = `Risk $${risk.toLocaleString()} > $1,000: +5`;
+    } else if (risk > 500) {
+      riskComponent = 10;
+      riskText = `Risk $${risk.toLocaleString()} > $500: +10`;
+    } else if (risk > 250) {
+      riskComponent = 15;
+      riskText = `Risk $${risk.toLocaleString()} > $250: +15`;
+    } else {
+      riskText = `Risk $${risk.toLocaleString()} <= $250: +20`;
+    }
   }
 
   const score = Math.round(
@@ -2690,10 +2710,22 @@ function scoreStrategyRow(row) {
     className = "score-early";
   }
 
-  return { score, label, className };
+  const breakdown = [
+    `Decision Score: ${score} (${label})`,
+    ``,
+    `Rolls Since: ${rawRollsSince}`,
+    Number.isFinite(adjustedRollsSince) ? `Adjusted Rolls Since: ${adjustedRollsSince}` : null,
+    `Used Rolls Since: ${rollsSince}`,
+    `Avg Delay: ${Number.isFinite(avgDelay) ? avgDelay : "—"}`,
+    `Max Delay: ${maxDelay}`,
+    ``,
+    `Max-delay pressure: ${(pctOfMax * 100).toFixed(1)}% of max -> +${percentileComponent.toFixed(1)} / 50`,
+    `Avg-delay pressure: ${Number.isFinite(avgDelay) && avgDelay > 0 ? avgPressure.toFixed(2) + "x avg" : "—"} -> +${pressureComponent.toFixed(1)} / 30`,
+    `${riskText} / 20`,
+  ].filter(Boolean).join("\n");
+
+  return { score, label, className, breakdown };
 }
-
-
 
 function attachStrategyProfileHandlers() {
   document.querySelectorAll(
