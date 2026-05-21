@@ -2728,12 +2728,12 @@ function scoreStrategyRow(row) {
 
   const breakdown = [
     `Decision Score: ${score} (${label})`,
-    ``,
-    `Rolls Since: ${rawRollsSince}`,
-    Number.isFinite(adjustedRollsSince) ? `Adjusted Rolls Since: ${adjustedRollsSince}` : null,
-    `Used Rolls Since: ${rollsSince}`,
-    `Avg Delay: ${Number.isFinite(avgDelay) ? avgDelay : "—"}`,
-    `Max Delay: ${maxDelay}`,
+    // ``,
+    // `Rolls Since: ${rawRollsSince}`,
+    // Number.isFinite(adjustedRollsSince) ? `Adjusted Rolls Since: ${adjustedRollsSince}` : null,
+    // `Used Rolls Since: ${rollsSince}`,
+    // `Avg Delay: ${Number.isFinite(avgDelay) ? avgDelay : "—"}`,
+    // `Max Delay: ${maxDelay}`,
     ``,
     `Max-delay pressure: ${(pctOfMax * 100).toFixed(1)}% of max -> +${percentileComponent.toFixed(1)} / 50`,
     `Avg-delay pressure: ${Number.isFinite(avgDelay) && avgDelay > 0 ? avgPressure.toFixed(2) + "x avg" : "—"} -> +${pressureComponent.toFixed(1)} / 30`,
