@@ -618,7 +618,7 @@ setTimeout(() => {
           ? adjustedRollsSince
           : rawRollsSince;
 
-          const maxDelay = Number(row["Max Delay"]);
+        const maxDelay = Number(row["Max Delay"]);
 
         const rawRisk = row["Martingale Risk"] ?? "";
         const adjustedRisk = row["Adjusted Martingale Risk"] ?? "";
@@ -770,8 +770,6 @@ setTimeout(() => {
         mrTd.appendChild(progressionBadge);
         mrTd.appendChild(riskSpan);
         tr.appendChild(mrTd);
-
-
 
         const name = tr.cells[0].textContent;
 
@@ -2722,8 +2720,8 @@ function scoreStrategyRow(row) {
       ? Math.min(15, (rollsSince / avgDelay) * 4)
       : 0;
 
-  let riskComponent = 20;
-  let riskText = "Risk unknown/blank: +20";
+  let riskComponent = 0;
+  let riskText = "Risk unknown/blank: +0";
 
   if (Number.isFinite(risk)) {
     if (risk > 1500) {
