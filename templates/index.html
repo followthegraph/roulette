@@ -305,7 +305,7 @@
       </div>
 
       <div id="strategyProfilePreview" class="strategy-profile-preview"></div>
-      <div id="scoreBreakdownTooltip" class="score-breakdown-tooltip"></div>  
+    
       <div id="strategyProfileModal" class="strategy-profile-modal hidden">
         <div class="strategy-profile-modal-card">
           <div class="strategy-profile-modal-header">
@@ -2639,13 +2639,21 @@ function renderHistogram(delays) {
   `;
 }
 
-function renderProfilePreview(profile) {
+function renderProfilePreview(profile, scoreBreakdown = "") {
+  const scoreHtml = scoreBreakdown
+    ? `
+      <hr style="border:0; border-top:1px solid rgba(255,255,255,.2); margin:8px 0;">
+      <div style="white-space:pre-line;">${scoreBreakdown}</div>
+    `
+    : "";
+
   return `
     <b>${profile.strategy}</b><br>
     Current: ${profile.current_delay ?? "—"} rolls<br>
     Avg: ${profile.avg_delay ?? "—"} | Median: ${profile.median_delay ?? "—"}<br>
     Max: ${profile.max_delay ?? "—"} | P95: ${profile.p95_delay ?? "—"}<br>
     Std Dev: ${profile.stddev_delay ?? "—"}
+    ${scoreHtml}
   `;
 }
 function scoreStrategyRow(row) {
@@ -2749,20 +2757,6 @@ function attachStrategyProfileHandlers() {
 
     signalCell.dataset.profileBound = "1";
     signalCell.style.cursor = "help";
-    // signalCell.title = "Hover for stats; click for full profile";
-
-    signalCell.addEventListener("mousemove", (e) => {
-      const tip = document.getElementById("scoreBreakdownTooltip");
-      if (!tip) return;
-
-      const text = signalCell.dataset.scoreBreakdown || "";
-      if (!text) return;
-
-      tip.textContent = text;
-      tip.style.left = `${Math.min(window.innerWidth - 380, e.clientX + 16)}px`;
-      tip.style.top = `${Math.min(window.innerHeight - 260, e.clientY + 16)}px`;
-      tip.style.display = "block";
-    });
 
     signalCell.addEventListener("mouseenter", async (e) => {
       if (window.innerWidth < 900) return;
@@ -2775,7 +2769,10 @@ function attachStrategyProfileHandlers() {
         if (!profile.ok) {
           preview.innerHTML = `<b>${strategy}</b><br>No profile data found.`;
         } else {
-          preview.innerHTML = renderProfilePreview(profile);
+          preview.innerHTML = renderProfilePreview(
+            profile,
+            signalCell.dataset.scoreBreakdown || ""
+          );
         }
 
         preview.style.left = `${Math.min(window.innerWidth - 340, e.clientX + 14)}px`;
@@ -2789,9 +2786,6 @@ function attachStrategyProfileHandlers() {
     
     signalCell.addEventListener("mouseleave", () => {
       document.getElementById("strategyProfilePreview").style.display = "none";
-
-      const tip = document.getElementById("scoreBreakdownTooltip");
-      if (tip) tip.style.display = "none";
     });
 
     signalCell.addEventListener("click", async () => {

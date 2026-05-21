@@ -392,7 +392,8 @@
     position: fixed;
     z-index: 9000;
     display: none;
-    width: 320px;
+    width: 420px;
+    max-width: calc(100vw - 32px);
     background: rgba(17, 24, 39, 0.96);
     color: white;
     border-radius: 12px;
