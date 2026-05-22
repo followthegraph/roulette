@@ -1270,6 +1270,132 @@ function updateJustHitTicket(latestNumber) {
     : `<div>No strategy matched the last number (${hit}).</div>`;
 }
 
+function populateNeighborsControls() {
+  const centerSelect = document.getElementById('neighborsCenterSelect');
+  const countSelect = document.getElementById('neighborsCountSelect');
+  const heatInput = document.getElementById('neighborsHeatRollCount');
+  const heatModeSelect = document.getElementById('neighborsHeatModeSelect');
+  if (!centerSelect || !countSelect || !heatInput || !heatModeSelect || centerSelect.dataset.ready === 'true') return;
+
+  [...wheelOrder].sort((a, b) => a - b).forEach(num => {
+    const option = document.createElement('option');
+    option.value = String(num);
+    option.textContent = String(num);
+    centerSelect.appendChild(option);
+  });
+
+  for (let count = 0; count <= 9; count++) {
+    const option = document.createElement('option');
+    option.value = String(count);
+    option.textContent = String(count);
+    if (count === 1) option.selected = true;
+    countSelect.appendChild(option);
+  }
+
+  centerSelect.value = '0';
+  heatInput.value = '50';
+  heatModeSelect.value = 'neutral';
+  centerSelect.dataset.ready = 'true';
+  centerSelect.addEventListener('change', () => updateNeighborsPanel(window.latestRolls || []));
+  countSelect.addEventListener('change', () => updateNeighborsPanel(window.latestRolls || []));
+  const commitHeatWindow = () => {
+    heatInput.value = String(sanitizeNeighborsHeatWindow(heatInput.value, 25));
+    updateNeighborsPanel(window.latestRolls || []);
+  };
+  const liveHeatWindowUpdate = () => {
+    updateNeighborsPanel(window.latestRolls || []);
+  };
+  heatInput.addEventListener('input', liveHeatWindowUpdate);
+  heatInput.addEventListener('blur', commitHeatWindow);
+  heatInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitHeatWindow();
+    }
+  });
+  heatModeSelect.addEventListener('change', () => updateNeighborsPanel(window.latestRolls || []));
+}
+
+function renderNeighborsRacetrack(numbers, centerNumber, heatCounts = {}, heatWindow = 50, maxHeatCount = 0, heatMode = 'neutral', overlayNumbers = []) {
+  const container = document.getElementById('neighborsRacetrack');
+  if (!container) return;
+  container.innerHTML = '';
+
+  wheelOrder.forEach(num => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.style.position = 'relative';
+    chip.style.borderRadius = '999px';
+    chip.style.padding = '0';
+    chip.style.width = '46px';
+    chip.style.height = '46px';
+    chip.style.minWidth = '46px';
+    chip.style.fontWeight = 'bold';
+    chip.style.cursor = 'pointer';
+    const wheelColor = numberColorMap[num] || 'green';
+    chip.style.border = wheelColor === 'red' ? '3px solid #b91c1c' : (wheelColor === 'black' ? '3px solid #111' : '3px solid #15803d');
+    chip.style.background = '#f3f4f6';
+    chip.style.boxShadow = '0 0 0 rgba(0,0,0,0)';
+    chip.style.transition = 'box-shadow 0.2s ease, border 0.2s ease';
+    chip.style.overflow = 'hidden';
+    chip.style.display = 'inline-flex';
+    chip.style.alignItems = 'center';
+    chip.style.justifyContent = 'center';
+
+    const hitCount = Number(heatCounts[num] || 0);
+    const heatStyle = getRacetrackHeatStyle(num, hitCount, maxHeatCount, heatMode);
+    const fill = document.createElement('span');
+    const ratio = maxHeatCount > 0 ? Math.max(0, Math.min(1, hitCount / maxHeatCount)) : 0;
+    const fillScale = hitCount > 0 ? (0.28 + ratio * 0.72) : 0;
+    fill.style.position = 'absolute';
+    fill.style.left = '50%';
+    fill.style.top = '50%';
+    fill.style.transform = 'translate(-50%, -50%)';
+    fill.style.width = `${Math.round(fillScale * 100)}%`;
+    fill.style.height = `${Math.round(fillScale * 100)}%`;
+    fill.style.borderRadius = '999px';
+    fill.style.background = hitCount > 0 ? heatStyle.background : 'transparent';
+    fill.style.transition = 'width 0.2s ease, height 0.2s ease, background 0.2s ease';
+    fill.style.boxShadow = hitCount > 0 ? 'inset 0 0 10px rgba(255,255,255,0.18)' : 'none';
+
+    const label = document.createElement('span');
+    label.textContent = String(num);
+    label.style.position = 'relative';
+    label.style.zIndex = '1';
+    label.style.color = hitCount > 0 ? heatStyle.text : '#333';
+    label.style.textShadow = hitCount > 0 && ratio >= 0.5 ? '0 1px 2px rgba(0,0,0,0.45)' : 'none';
+
+    chip.title = `${hitCount} times in last ${heatWindow} rolls`;
+    chip.appendChild(fill);
+    chip.appendChild(label);
+
+    if (numbers.includes(num)) {
+      chip.style.boxShadow = '0 0 0 3px rgba(255, 215, 0, 0.9)';
+    }
+    if (overlayNumbers.includes(num)) {
+      chip.classList.add('urgency-highlighted');
+      if (!numbers.includes(num)) {
+        chip.style.boxShadow = '0 0 0 3px rgba(124, 58, 237, 0.92)';
+      } else {
+        chip.style.boxShadow = '0 0 0 3px rgba(255, 215, 0, 0.9), 0 0 0 6px rgba(124, 58, 237, 0.82)';
+      }
+    }
+    if (num === centerNumber) {
+      chip.style.border = '3px solid red';
+    }
+
+    chip.addEventListener('click', () => {
+      const centerSelect = document.getElementById('neighborsCenterSelect');
+      if (!centerSelect) return;
+      centerSelect.value = String(num);
+      updateNeighborsPanel(window.latestRolls || []);
+    });
+
+    container.appendChild(chip);
+  });
+}
+
+
   let allData = [];
 
 
@@ -2499,130 +2625,6 @@ function renderNeighborsHeatLegend(maxCount, usedWindow, heatMode) {
   });
 }
 
-function populateNeighborsControls() {
-  const centerSelect = document.getElementById('neighborsCenterSelect');
-  const countSelect = document.getElementById('neighborsCountSelect');
-  const heatInput = document.getElementById('neighborsHeatRollCount');
-  const heatModeSelect = document.getElementById('neighborsHeatModeSelect');
-  if (!centerSelect || !countSelect || !heatInput || !heatModeSelect || centerSelect.dataset.ready === 'true') return;
-
-  [...wheelOrder].sort((a, b) => a - b).forEach(num => {
-    const option = document.createElement('option');
-    option.value = String(num);
-    option.textContent = String(num);
-    centerSelect.appendChild(option);
-  });
-
-  for (let count = 0; count <= 9; count++) {
-    const option = document.createElement('option');
-    option.value = String(count);
-    option.textContent = String(count);
-    if (count === 1) option.selected = true;
-    countSelect.appendChild(option);
-  }
-
-  centerSelect.value = '0';
-  heatInput.value = '50';
-  heatModeSelect.value = 'neutral';
-  centerSelect.dataset.ready = 'true';
-  centerSelect.addEventListener('change', () => updateNeighborsPanel(window.latestRolls || []));
-  countSelect.addEventListener('change', () => updateNeighborsPanel(window.latestRolls || []));
-  const commitHeatWindow = () => {
-    heatInput.value = String(sanitizeNeighborsHeatWindow(heatInput.value, 25));
-    updateNeighborsPanel(window.latestRolls || []);
-  };
-  const liveHeatWindowUpdate = () => {
-    updateNeighborsPanel(window.latestRolls || []);
-  };
-  heatInput.addEventListener('input', liveHeatWindowUpdate);
-  heatInput.addEventListener('blur', commitHeatWindow);
-  heatInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      commitHeatWindow();
-    }
-  });
-  heatModeSelect.addEventListener('change', () => updateNeighborsPanel(window.latestRolls || []));
-}
-
-function renderNeighborsRacetrack(numbers, centerNumber, heatCounts = {}, heatWindow = 50, maxHeatCount = 0, heatMode = 'neutral', overlayNumbers = []) {
-  const container = document.getElementById('neighborsRacetrack');
-  if (!container) return;
-  container.innerHTML = '';
-
-  wheelOrder.forEach(num => {
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.style.position = 'relative';
-    chip.style.borderRadius = '999px';
-    chip.style.padding = '0';
-    chip.style.width = '46px';
-    chip.style.height = '46px';
-    chip.style.minWidth = '46px';
-    chip.style.fontWeight = 'bold';
-    chip.style.cursor = 'pointer';
-    const wheelColor = numberColorMap[num] || 'green';
-    chip.style.border = wheelColor === 'red' ? '3px solid #b91c1c' : (wheelColor === 'black' ? '3px solid #111' : '3px solid #15803d');
-    chip.style.background = '#f3f4f6';
-    chip.style.boxShadow = '0 0 0 rgba(0,0,0,0)';
-    chip.style.transition = 'box-shadow 0.2s ease, border 0.2s ease';
-    chip.style.overflow = 'hidden';
-    chip.style.display = 'inline-flex';
-    chip.style.alignItems = 'center';
-    chip.style.justifyContent = 'center';
-
-    const hitCount = Number(heatCounts[num] || 0);
-    const heatStyle = getRacetrackHeatStyle(num, hitCount, maxHeatCount, heatMode);
-    const fill = document.createElement('span');
-    const ratio = maxHeatCount > 0 ? Math.max(0, Math.min(1, hitCount / maxHeatCount)) : 0;
-    const fillScale = hitCount > 0 ? (0.28 + ratio * 0.72) : 0;
-    fill.style.position = 'absolute';
-    fill.style.left = '50%';
-    fill.style.top = '50%';
-    fill.style.transform = 'translate(-50%, -50%)';
-    fill.style.width = `${Math.round(fillScale * 100)}%`;
-    fill.style.height = `${Math.round(fillScale * 100)}%`;
-    fill.style.borderRadius = '999px';
-    fill.style.background = hitCount > 0 ? heatStyle.background : 'transparent';
-    fill.style.transition = 'width 0.2s ease, height 0.2s ease, background 0.2s ease';
-    fill.style.boxShadow = hitCount > 0 ? 'inset 0 0 10px rgba(255,255,255,0.18)' : 'none';
-
-    const label = document.createElement('span');
-    label.textContent = String(num);
-    label.style.position = 'relative';
-    label.style.zIndex = '1';
-    label.style.color = hitCount > 0 ? heatStyle.text : '#333';
-    label.style.textShadow = hitCount > 0 && ratio >= 0.5 ? '0 1px 2px rgba(0,0,0,0.45)' : 'none';
-
-    chip.title = `${hitCount} times in last ${heatWindow} rolls`;
-    chip.appendChild(fill);
-    chip.appendChild(label);
-
-    if (numbers.includes(num)) {
-      chip.style.boxShadow = '0 0 0 3px rgba(255, 215, 0, 0.9)';
-    }
-    if (overlayNumbers.includes(num)) {
-      chip.classList.add('urgency-highlighted');
-      if (!numbers.includes(num)) {
-        chip.style.boxShadow = '0 0 0 3px rgba(124, 58, 237, 0.92)';
-      } else {
-        chip.style.boxShadow = '0 0 0 3px rgba(255, 215, 0, 0.9), 0 0 0 6px rgba(124, 58, 237, 0.82)';
-      }
-    }
-    if (num === centerNumber) {
-      chip.style.border = '3px solid red';
-    }
-
-    chip.addEventListener('click', () => {
-      const centerSelect = document.getElementById('neighborsCenterSelect');
-      if (!centerSelect) return;
-      centerSelect.value = String(num);
-      updateNeighborsPanel(window.latestRolls || []);
-    });
-
-    container.appendChild(chip);
-  });
-}
 
   document.addEventListener("click", () => {
     const audio = document.getElementById('dingSound');
