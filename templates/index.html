@@ -1605,90 +1605,6 @@ function sameNumberSet(a, b) {
 
 
 
-    async function fetchData() {
-      const timestamp = new Date().getTime();
-      const wheelId = getCurrentWheelId();
-      const statsWindow = document.getElementById("statsWindowSelect")?.value || "500";
-
-      const stats = await fetch(
-        `https://eu.getdatbp.com/stats-window.json?wheel_id=${encodeURIComponent(wheelId)}&window=${encodeURIComponent(statsWindow)}&t=${timestamp}`
-      ).then(res => res.json());
-
-      allData = stats;
-
-      const rolls = await fetch(`/roulette_data.json?t=${timestamp}`).then(r => r.json());
-      window.latestRolls = rolls;
-
-      document.getElementById("lastUpdated").innerText =
-        "Last updated: " + new Date().toLocaleTimeString();
-
-      renderTicker(rolls);
-      renderHitFrequency(rolls);
-      updateTopStreetsTicker(allData);
-      const lastHitNumber = parseInt(rolls[0]?.number);
-      console.log("🎯 Last Hit Number:", lastHitNumber);
-      if (!isNaN(lastHitNumber)) {
-        try {
-          // updateJustHitTicket(lastHitNumber);
-        } catch (e) { console.warn('JustHitTicket failed:', e); }
-      } else {
-        console.warn("Could not determine last hit number.");
-      }
-          // ===============================
-    // Group Comparison: Thirds vs Rows
-    // ===============================
-      const groupA = ["'1st & 12", "'2nd & 12", "'3rd & 12"];
-      const groupB = ["'Top Row", "'Middle Row", "'Bottom Row"];
-
-      const getRollsSince = (label) => {
-        const row = allData.find(r => normalizeStrategyName(r["Betting Strategy"]) === normalizeStrategyName(label));
-        return row && row["Rolls Since Last Hit"] !== "" ? parseFloat(row["Rolls Since Last Hit"]) : null;
-      };
-
-      const getTop2Stats = (group) => {
-        const delays = group.map(getRollsSince).filter(v => v !== null).sort((a, b) => b - a).slice(0, 2);
-        if (delays.length < 2) return null;
-        const avg = (delays[0] + delays[1]) / 2;
-        const sum = delays[0] + delays[1];
-        return { avg, sum };
-      };
-
-      const aStats = getTop2Stats(groupA);
-      const bStats = getTop2Stats(groupB);
-
-      let groupRecommendation = "❓ Not enough data to compare Rows vs Thirds";
-
-      if (aStats && bStats) {
-        if (aStats.avg > bStats.avg) {
-          groupRecommendation = "✅ Prefer Thirds (1st/2nd/3rd & 12)";
-        } else if (bStats.avg > aStats.avg) {
-          groupRecommendation = "✅ Prefer Rows (Top/Middle/Bottom)";
-        } else {
-          groupRecommendation = aStats.sum > bStats.sum
-            ? "✅ Prefer Thirds (sum advantage)"
-            : "✅ Prefer Rows (sum advantage)";
-        }
-      }
-      const recDiv = document.getElementById("preferredGroupDisplay");
-      if (recDiv) {
-        recDiv.innerText = groupRecommendation;
-      }
-
-      updateNeighborsPanel(rolls);
-
-renderTables(true);
-renderUrgencyOverlay(allData);
-saveUrgencySnapshot(allData);
-setTimeout(() => {
-  if (typeof rolls !== "undefined" && rolls.length > 0) {
-    const lastNumber = rolls[0].number;
-    // updateJustHitTicket(lastNumber);
-  } else {
-    console.warn("[JustHitTicket] Rolls data not available yet.");
-  }
-}, 100);
-
-    }
 
   document.getElementById("lastUpdated").innerText =
   "Last updated: " + new Date().toLocaleTimeString();
@@ -2487,6 +2403,92 @@ function activateUrgencyRacetrackHighlight(numbers) {
   updateNeighborsPanel(window.latestRolls || []);
   scheduleUrgencyHighlightExpiry();
 }
+
+
+async function fetchData() {
+      const timestamp = new Date().getTime();
+      const wheelId = getCurrentWheelId();
+      const statsWindow = document.getElementById("statsWindowSelect")?.value || "500";
+
+      const stats = await fetch(
+        `https://eu.getdatbp.com/stats-window.json?wheel_id=${encodeURIComponent(wheelId)}&window=${encodeURIComponent(statsWindow)}&t=${timestamp}`
+      ).then(res => res.json());
+
+      allData = stats;
+
+      const rolls = await fetch(`/roulette_data.json?t=${timestamp}`).then(r => r.json());
+      window.latestRolls = rolls;
+
+      document.getElementById("lastUpdated").innerText =
+        "Last updated: " + new Date().toLocaleTimeString();
+
+      renderTicker(rolls);
+      renderHitFrequency(rolls);
+      updateTopStreetsTicker(allData);
+      const lastHitNumber = parseInt(rolls[0]?.number);
+      console.log("🎯 Last Hit Number:", lastHitNumber);
+      if (!isNaN(lastHitNumber)) {
+        try {
+          // updateJustHitTicket(lastHitNumber);
+        } catch (e) { console.warn('JustHitTicket failed:', e); }
+      } else {
+        console.warn("Could not determine last hit number.");
+      }
+          // ===============================
+    // Group Comparison: Thirds vs Rows
+    // ===============================
+      const groupA = ["'1st & 12", "'2nd & 12", "'3rd & 12"];
+      const groupB = ["'Top Row", "'Middle Row", "'Bottom Row"];
+
+      const getRollsSince = (label) => {
+        const row = allData.find(r => normalizeStrategyName(r["Betting Strategy"]) === normalizeStrategyName(label));
+        return row && row["Rolls Since Last Hit"] !== "" ? parseFloat(row["Rolls Since Last Hit"]) : null;
+      };
+
+      const getTop2Stats = (group) => {
+        const delays = group.map(getRollsSince).filter(v => v !== null).sort((a, b) => b - a).slice(0, 2);
+        if (delays.length < 2) return null;
+        const avg = (delays[0] + delays[1]) / 2;
+        const sum = delays[0] + delays[1];
+        return { avg, sum };
+      };
+
+      const aStats = getTop2Stats(groupA);
+      const bStats = getTop2Stats(groupB);
+
+      let groupRecommendation = "❓ Not enough data to compare Rows vs Thirds";
+
+      if (aStats && bStats) {
+        if (aStats.avg > bStats.avg) {
+          groupRecommendation = "✅ Prefer Thirds (1st/2nd/3rd & 12)";
+        } else if (bStats.avg > aStats.avg) {
+          groupRecommendation = "✅ Prefer Rows (Top/Middle/Bottom)";
+        } else {
+          groupRecommendation = aStats.sum > bStats.sum
+            ? "✅ Prefer Thirds (sum advantage)"
+            : "✅ Prefer Rows (sum advantage)";
+        }
+      }
+      const recDiv = document.getElementById("preferredGroupDisplay");
+      if (recDiv) {
+        recDiv.innerText = groupRecommendation;
+      }
+
+      updateNeighborsPanel(rolls);
+
+renderTables(true);
+renderUrgencyOverlay(allData);
+saveUrgencySnapshot(allData);
+setTimeout(() => {
+  if (typeof rolls !== "undefined" && rolls.length > 0) {
+    const lastNumber = rolls[0].number;
+    // updateJustHitTicket(lastNumber);
+  } else {
+    console.warn("[JustHitTicket] Rolls data not available yet.");
+  }
+}, 100);
+
+    }
 
 function renderUrgencyOverlay(dataRows) {
   const listEl = document.getElementById('urgencyOverlayList');
