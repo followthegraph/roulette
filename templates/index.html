@@ -443,6 +443,128 @@ const numberColorMap = {
         if (host.includes("eu")) return "eu-wheel";
         return null;
       }
+      function renderHitFrequency(data) {
+        const container = document.getElementById("heatmap");
+
+        const hiddenWrap = document.createElement("div");
+        hiddenWrap.style.display = "none";
+        hiddenWrap.style.flexWrap = "wrap";
+        hiddenWrap.style.justifyContent = "center";
+        hiddenWrap.style.gap = "6px";
+        hiddenWrap.style.display = "flex";
+
+        const hitMap = {};
+        const lastSeenMap = {};
+        for (let i = 0; i <= 36; i++) {
+          hitMap[i] = 0;
+          lastSeenMap[i] = null;
+        }
+
+        data.forEach((entry, index) => {
+          const num = parseInt(entry.number);
+          if (!isNaN(num)) {
+            hitMap[num]++;
+            if (lastSeenMap[num] === null) {
+              lastSeenMap[num] = index;
+            }
+          }
+        });
+
+        const sortByLastHit = document.getElementById("sortMode")?.value === "lastHit";
+
+        const sortedEntries = Object.keys(hitMap)
+          .map(n => parseInt(n))
+          .sort((a, b) => {
+            if (sortByLastHit) {
+              const aSeen = lastSeenMap[a] ?? Infinity;
+              const bSeen = lastSeenMap[b] ?? Infinity;
+              return bSeen - aSeen;
+            } else {
+              return hitMap[a] - hitMap[b];
+            }
+          }).reverse();
+
+          const maxHits = Math.max(...Object.values(hitMap));
+          const minHits = Math.min(...Object.values(hitMap));
+          const validLastHits = Object.values(lastSeenMap).filter(x => x !== null);
+          const maxLastSeen = Math.max(...validLastHits);
+          const minLastSeen = Math.min(...validLastHits);
+
+          sortedEntries.forEach(num => {
+            const box = document.createElement("div");
+            box.className = "heat-box";
+            const hits = hitMap[num];
+            const lastSeen = lastSeenMap[num] ?? "-";
+
+            let darkness;
+            if (sortByLastHit) {
+              const normalized = (lastSeenMap[num] ?? maxLastSeen) - minLastSeen;
+              const range = (maxLastSeen - minLastSeen) || 1;
+              darkness = Math.floor((1 - normalized / range) * 200); // newer = darker
+            } else {
+              darkness = Math.floor(((hits - minHits) / (maxHits - minHits || 1)) * 200);
+            }
+
+            box.style.backgroundColor = `rgb(${255 - darkness}, ${50 + darkness}, 50)`;
+            box.style.transition = "background-color 0.3s ease";
+            const wheelColor = numberColorMap[num] || 'green';
+            box.style.border = wheelColor === 'red' ? '3px solid #b91c1c' : (wheelColor === 'black' ? '3px solid #111' : '3px solid #15803d');
+            box.style.borderLeft = wheelColor === 'red' ? '8px solid #b91c1c' : (wheelColor === 'black' ? '8px solid #111' : '8px solid #15803d');
+            box.style.borderRadius = "6px";
+            box.style.padding = "4px";
+            box.style.width = "50px";
+            box.style.height = "50px";
+            box.style.boxShadow = "0 0 4px rgba(0,0,0,0.3)";
+            box.style.display = "flex";
+            box.style.flexDirection = "column";
+            box.style.alignItems = "center";
+            box.style.justifyContent = "center";
+            box.style.fontFamily = "Arial, sans-serif";
+            textColor = numberColorMap[num] || 'white';
+            box.innerHTML = `
+              <div style="font-size:20px; font-weight:bold; color:${textColor};  text-shadow:
+                    -1px -1px 0 white,
+                    1px -1px 0 white,
+                    -1px  1px 0 white,
+                    1px  1px 0 white;">${num}</div>
+              <div style="font-size:12px; color:#000000;">${hits} hits</div>
+              <div style="font-size:12px; color:#000000;">LH ${lastSeen}</div>
+            `;
+            hiddenWrap.appendChild(box);
+          });
+
+          container.innerHTML = "";
+          container.appendChild(hiddenWrap);
+          hiddenWrap.style.display = "flex"; // now show
+          
+          if (isMouseDown && currentlyHeldStrategy) {
+            if (Array.isArray(currentlyHeldStrategy)) {
+              highlightSpecificNumbers(currentlyHeldStrategy);
+            } else {
+              highlightHeatboxesForStrategy(currentlyHeldStrategy);
+            }
+          }
+
+          function updateColdestTicker(lastSeenMap) {
+            const coldest = Object.entries(lastSeenMap)
+              .filter(([_, v]) => v !== null)
+              .sort((a, b) => b[1] - a[1])  // Sort by last seen, largest (coldest) first
+              .slice(0, 6)
+              .map(([n]) => parseInt(n))
+              .sort((a, b) => a - b); // Sort numerically
+
+            const ticker = document.getElementById("coldestTicker");
+            ticker.innerHTML = "<b style='color:#333;margin-right:8px;'>❄️ Coldest (Numeric Order):</b>";
+
+            coldest.forEach(n => {
+              const span = document.createElement("div");
+              span.textContent = n;
+              span.className = numberColorMap[n] || "black";
+              ticker.appendChild(span);
+            });
+          }
+          updateColdestTicker(lastSeenMap);
+        }
 
   let allData = [];
 
@@ -2215,130 +2337,6 @@ function updateJustHitTicket(latestNumber) {
     ? `<div style="margin-bottom: 5px;">🎯 <b>Strategies that hit ${hit}:</b></div>` + matches.join("")
     : `<div>No strategy matched the last number (${hit}).</div>`;
 }
-
-
-function renderHitFrequency(data) {
-  const container = document.getElementById("heatmap");
-
-  const hiddenWrap = document.createElement("div");
-  hiddenWrap.style.display = "none";
-  hiddenWrap.style.flexWrap = "wrap";
-  hiddenWrap.style.justifyContent = "center";
-  hiddenWrap.style.gap = "6px";
-  hiddenWrap.style.display = "flex";
-
-  const hitMap = {};
-  const lastSeenMap = {};
-  for (let i = 0; i <= 36; i++) {
-    hitMap[i] = 0;
-    lastSeenMap[i] = null;
-  }
-
-  data.forEach((entry, index) => {
-    const num = parseInt(entry.number);
-    if (!isNaN(num)) {
-      hitMap[num]++;
-      if (lastSeenMap[num] === null) {
-        lastSeenMap[num] = index;
-      }
-    }
-  });
-
-  const sortByLastHit = document.getElementById("sortMode")?.value === "lastHit";
-
-  const sortedEntries = Object.keys(hitMap)
-    .map(n => parseInt(n))
-    .sort((a, b) => {
-      if (sortByLastHit) {
-        const aSeen = lastSeenMap[a] ?? Infinity;
-        const bSeen = lastSeenMap[b] ?? Infinity;
-        return bSeen - aSeen;
-      } else {
-        return hitMap[a] - hitMap[b];
-      }
-    }).reverse();
-
-    const maxHits = Math.max(...Object.values(hitMap));
-    const minHits = Math.min(...Object.values(hitMap));
-    const validLastHits = Object.values(lastSeenMap).filter(x => x !== null);
-    const maxLastSeen = Math.max(...validLastHits);
-    const minLastSeen = Math.min(...validLastHits);
-
-    sortedEntries.forEach(num => {
-      const box = document.createElement("div");
-      box.className = "heat-box";
-      const hits = hitMap[num];
-      const lastSeen = lastSeenMap[num] ?? "-";
-
-      let darkness;
-      if (sortByLastHit) {
-        const normalized = (lastSeenMap[num] ?? maxLastSeen) - minLastSeen;
-        const range = (maxLastSeen - minLastSeen) || 1;
-        darkness = Math.floor((1 - normalized / range) * 200); // newer = darker
-      } else {
-        darkness = Math.floor(((hits - minHits) / (maxHits - minHits || 1)) * 200);
-      }
-
-      box.style.backgroundColor = `rgb(${255 - darkness}, ${50 + darkness}, 50)`;
-      box.style.transition = "background-color 0.3s ease";
-      const wheelColor = numberColorMap[num] || 'green';
-      box.style.border = wheelColor === 'red' ? '3px solid #b91c1c' : (wheelColor === 'black' ? '3px solid #111' : '3px solid #15803d');
-      box.style.borderLeft = wheelColor === 'red' ? '8px solid #b91c1c' : (wheelColor === 'black' ? '8px solid #111' : '8px solid #15803d');
-      box.style.borderRadius = "6px";
-      box.style.padding = "4px";
-      box.style.width = "50px";
-      box.style.height = "50px";
-      box.style.boxShadow = "0 0 4px rgba(0,0,0,0.3)";
-      box.style.display = "flex";
-      box.style.flexDirection = "column";
-      box.style.alignItems = "center";
-      box.style.justifyContent = "center";
-      box.style.fontFamily = "Arial, sans-serif";
-      textColor = numberColorMap[num] || 'white';
-      box.innerHTML = `
-        <div style="font-size:20px; font-weight:bold; color:${textColor};  text-shadow:
-              -1px -1px 0 white,
-              1px -1px 0 white,
-              -1px  1px 0 white,
-              1px  1px 0 white;">${num}</div>
-        <div style="font-size:12px; color:#000000;">${hits} hits</div>
-        <div style="font-size:12px; color:#000000;">LH ${lastSeen}</div>
-      `;
-      hiddenWrap.appendChild(box);
-    });
-
-    container.innerHTML = "";
-    container.appendChild(hiddenWrap);
-    hiddenWrap.style.display = "flex"; // now show
-    
-    if (isMouseDown && currentlyHeldStrategy) {
-      if (Array.isArray(currentlyHeldStrategy)) {
-        highlightSpecificNumbers(currentlyHeldStrategy);
-      } else {
-        highlightHeatboxesForStrategy(currentlyHeldStrategy);
-      }
-    }
-
-    function updateColdestTicker(lastSeenMap) {
-      const coldest = Object.entries(lastSeenMap)
-        .filter(([_, v]) => v !== null)
-        .sort((a, b) => b[1] - a[1])  // Sort by last seen, largest (coldest) first
-        .slice(0, 6)
-        .map(([n]) => parseInt(n))
-        .sort((a, b) => a - b); // Sort numerically
-
-      const ticker = document.getElementById("coldestTicker");
-      ticker.innerHTML = "<b style='color:#333;margin-right:8px;'>❄️ Coldest (Numeric Order):</b>";
-
-      coldest.forEach(n => {
-        const span = document.createElement("div");
-        span.textContent = n;
-        span.className = numberColorMap[n] || "black";
-        ticker.appendChild(span);
-      });
-    }
-    updateColdestTicker(lastSeenMap);
-  }
 
   function updateTopStreetsTicker(data) {
     const audio = document.getElementById("dingSound");
