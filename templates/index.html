@@ -436,8 +436,17 @@ const numberColorMap = {
   35: 'black',
   36: 'red'
 };
+    function getCurrentWheelId() {
+        const host = window.location.hostname;
+        if (host.includes("flash")) return "flash-wheel";
+        if (host.includes("classic")) return "classic-wheel";
+        if (host.includes("eu")) return "eu-wheel";
+        return null;
+      }
 
-let allData = [];
+  let allData = [];
+
+
 
     async function fetchData() {
       const timestamp = new Date().getTime();
@@ -2623,14 +2632,6 @@ function renderHitFrequency(data) {
   });
 
   let activeProfileStrategy = null;
-
-function getCurrentWheelId() {
-  const host = window.location.hostname;
-  if (host.includes("flash")) return "flash-wheel";
-  if (host.includes("classic")) return "classic-wheel";
-  if (host.includes("eu")) return "eu-wheel";
-  return null;
-}
 
 async function fetchStrategyProfile(strategy, windowSize = "500") {
   const wheelId = getCurrentWheelId();
