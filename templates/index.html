@@ -1594,6 +1594,11 @@ function computeNeighborsStats(rolls, numbers, strategyLabel) {
   };
 }
 
+function sameNumberSet(a, b) {
+  const aa = [...new Set(a)].sort((x, y) => x - y);
+  const bb = [...new Set(b)].sort((x, y) => x - y);
+  return aa.length === bb.length && aa.every((value, index) => value === bb[index]);
+}
 
 
   let allData = [];
@@ -2222,17 +2227,6 @@ function updateStickyScrollState() {
     <div id="tooltip" class="tooltip"></div>
 
     <script>
-
-
-
-function sameNumberSet(a, b) {
-  const aa = [...new Set(a)].sort((x, y) => x - y);
-  const bb = [...new Set(b)].sort((x, y) => x - y);
-  return aa.length === bb.length && aa.every((value, index) => value === bb[index]);
-}
-
-
-
 
 async function saveUrgencySnapshot(dataRows) {
   try {
