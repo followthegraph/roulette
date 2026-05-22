@@ -112,11 +112,68 @@
         background: #4a1616;
         color: #ff8585;
     }
+    .action-log-wrap {
+    margin-bottom: 18px;
+    background: #111827;
+    border: 1px solid #2e3444;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .action-log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background: #1f2937;
+  }
+
+  .action-log-header button {
+    width: auto;
+    margin: 0;
+    padding: 5px 10px;
+    background: #374151;
+  }
+
+  .action-log {
+    max-height: 240px;
+    overflow: auto;
+    padding: 10px;
+    font-family: Consolas, monospace;
+    font-size: 12px;
+  }
+
+  .log-entry {
+    border-bottom: 1px solid #2e3444;
+    padding: 8px 0;
+    white-space: pre-wrap;
+  }
+
+  .log-entry.ok {
+    color: #72f59a;
+  }
+
+  .log-entry.bad {
+    color: #ff8585;
+  }
+
+  .log-entry.running {
+    color: #cbd3e3;
+  }
   </style>
 </head>
 <body>
   <h1>Roulette Admin Dashboard</h1>
   <div id="message" class="message">Ready.</div>
+  <div class="action-log-wrap">
+    <div class="action-log-header">
+      <b>Action Log</b>
+      <button type="button" onclick="clearActionLog()">Clear</button>
+      <button onclick="runActionAll('update')">Git Pull All</button>
+      <button class="danger" onclick="runActionAll('update_and_restart')">Update + Restart All</button>
+    </div>
+    <div id="actionLog" class="action-log"></div>
+  </div>
   <div id="servers" class="grid"></div>
 
   <script>
@@ -132,35 +189,105 @@
       return `<span class="pill ${cls}">${label}: ${running ? "ON" : "OFF"} (${count})</span>`;
     }
 
+    async function runActionAll(action) {
+      const ok = confirm(`Run ${action} on all servers?`);
+      if (!ok) return;
+
+      for (const server of ["classic", "eu", "flash"]) {
+        await runAction(server, action, false);
+      }
+    }
+
     async function runAction(server, action) {
-        const ok = confirm(`Run ${action} on ${server}?`);
-        if (!ok) return;
+      const ok = confirm(`Run ${action} on ${server}?`);
+      if (!ok) return;
 
-        const msg = document.getElementById("message");
-        msg.className = "message";
-        msg.textContent = `Running ${action} on ${server}...`;
+      const msg = document.getElementById("message");
 
+      msg.className = "message";
+      msg.textContent = `Running ${action} on ${server}...`;
+
+      addActionLog(server, action, "running");
+
+      try {
         const res = await fetch(`/admin/server-action/${server}/${action}`, {
-            method: "POST"
+          method: "POST"
         });
 
-        const data = await res.json();
-
-        if (!data.ok) {
-            msg.className = "message bad";
-            msg.textContent = `${server}: ${action} failed.`;
-            alert(`Action failed:\n${data.stderr || data.error || data.stdout}`);
-        } else {
-            msg.className = "message ok";
-            msg.textContent = `${server}: ${action} completed.`;
-
-            if (data.stdout) {
-            console.log(`${server} ${action}:`, data.stdout);
-            }
+        if (res.status === 401) {
+          window.location.href = "/admin/login";
+          return;
         }
 
+        let data;
+
+        try {
+          data = await res.json();
+        } catch {
+          if (
+            server === "eu" &&
+            ["restart_app", "restart_all_clean", "update_and_restart"].includes(action)
+          ) {
+            msg.className = "message ok";
+            msg.textContent = `${server}: ${action} triggered. Reconnecting...`;
+
+            addActionLog(server, action, "ok", "Restart triggered; connection dropped as expected.");
+
+            setTimeout(loadStatus, 8000);
+            return;
+          }
+
+          const text = await res.text();
+          throw new Error(text.slice(0, 500));
+        }
+
+        const details = [
+          data.stdout ? `STDOUT:\n${data.stdout}` : "",
+          data.stderr ? `STDERR:\n${data.stderr}` : "",
+          data.error ? `ERROR:\n${data.error}` : "",
+        ].filter(Boolean).join("\n\n");
+
+        if (!data.ok) {
+          msg.className = "message bad";
+          msg.textContent = `${server}: ${action} failed.`;
+          addActionLog(server, action, "bad", details || "Action failed.");
+          return;
+        }
+
+        msg.className = "message ok";
+        msg.textContent = `${server}: ${action} completed.`;
+        addActionLog(server, action, "ok", details || "Completed successfully.");
+
         setTimeout(loadStatus, 2500);
+
+      } catch (err) {
+        msg.className = "message bad";
+        msg.textContent = `${server}: ${action} request error.`;
+        addActionLog(server, action, "bad", err.message || String(err));
+      }
     }
+
+    function addActionLog(server, action, status, details = "") {
+      const log = document.getElementById("actionLog");
+      if (!log) return;
+
+      const time = new Date().toLocaleTimeString();
+
+      const div = document.createElement("div");
+      div.className = `log-entry ${status}`;
+
+      div.textContent =
+        `[${time}] ${server} :: ${action} :: ${status.toUpperCase()}` +
+        (details ? `\n${details}` : "");
+
+      log.prepend(div);
+    }
+
+    function clearActionLog() {
+      const log = document.getElementById("actionLog");
+      if (log) log.innerHTML = "";
+    }
+
 
     async function loadStatus() {
       const res = await fetch("/admin/server-status?t=" + Date.now());
