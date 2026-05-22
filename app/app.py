@@ -1082,27 +1082,13 @@ def backtest_entry():
         "P99": simulate_threshold("P99", percentile(delays, 99)),
     }
 
-    eligible = [
-        t for t in tests.values()
-        if t
-        and t["entries"] >= min_entries
-        and t["success_rate"] is not None
-        and (max_wait_limit is None or t["max_wait"] <= max_wait_limit)
-    ]
+    def recommendation_payload(best, reason_prefix=""):
+        if not best:
+            return None
 
-    if eligible:
-        best = sorted(
-            eligible,
-            key=lambda x: (
-                x["recommendation_score"],
-                x["success_rate"],
-                -x["avg_wait"],
-                x["entries"],
-            ),
-            reverse=True
-        )[0]
+        prefix = f"{reason_prefix} " if reason_prefix else ""
 
-        recommended_entry = {
+        return {
             "label": best["label"],
             "threshold": best["threshold"],
             "entries": best["entries"],
@@ -1112,19 +1098,50 @@ def backtest_entry():
             "max_wait": best["max_wait"],
             "recommendation_score": best["recommendation_score"],
             "reason": (
-                f"{best['label']} is recommended because it had "
+                f"{prefix}{best['label']} is recommended because it had "
                 f"{best['entries']} historical entries, "
                 f"{best['success_rate']}% hit within {success_rolls} rolls, "
                 f"an average wait of {best['avg_wait']} rolls, "
                 f"and a worst wait of {best['max_wait']} rolls."
             )
         }
-    else:
-        recommended_entry = {
+
+
+    all_valid = [
+        t for t in tests.values()
+        if t and t["entries"] > 0 and t["success_rate"] is not None
+    ]
+
+    strict_eligible = [
+        t for t in all_valid
+        if t["entries"] >= min_entries
+        and (max_wait_limit is None or t["max_wait"] <= max_wait_limit)
+    ]
+
+    best_available_pool = [
+        t for t in all_valid
+        if t["entries"] >= max(3, min_entries // 2)
+    ]
+
+    def rank_key(t):
+        return (
+            t["recommendation_score"],
+            t["success_rate"],
+            -t["avg_wait"],
+            t["entries"],
+        )
+
+    strict_best = sorted(strict_eligible, key=rank_key, reverse=True)[0] if strict_eligible else None
+    best_available = sorted(best_available_pool, key=rank_key, reverse=True)[0] if best_available_pool else None
+
+    strict_recommended_entry = recommendation_payload(strict_best)
+
+    if strict_recommended_entry is None:
+        strict_recommended_entry = {
             "label": None,
             "threshold": None,
             "reason": (
-                f"No entry met the minimum requirements of "
+                f"No entry met the strict requirements of "
                 f"{min_entries} historical entries"
                 + (
                     f" and max wait <= {max_wait_limit}."
@@ -1132,6 +1149,24 @@ def backtest_entry():
                 )
             )
         }
+
+    best_available_entry = recommendation_payload(
+        best_available,
+        "Best available:"
+    )
+
+    if best_available_entry is None:
+        best_available_entry = {
+            "label": None,
+            "threshold": None,
+            "reason": "No historical entry point had enough examples to evaluate."
+        }
+
+    recommended_entry = (
+        strict_recommended_entry
+        if strict_recommended_entry.get("label")
+        else best_available_entry
+    )
 
     return jsonify({
         "ok": True,
@@ -1149,6 +1184,8 @@ def backtest_entry():
         },
         "entry_tests": tests,
         "recommended_entry": recommended_entry,
+        "strict_recommended_entry": strict_recommended_entry,
+        "best_available_entry": best_available_entry,
     })
 
 @app.route("/global-roll-timing")
