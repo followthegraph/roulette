@@ -967,6 +967,15 @@ def backtest_entry():
     strategy = request.args.get("strategy", "").lstrip("'").strip()
     window = request.args.get("window", "500")
 
+    success_rolls = int(request.args.get("success_rolls", 5))
+    min_entries = int(request.args.get("min_entries", 8))
+    max_wait_limit = request.args.get("max_wait_limit", "")
+
+    try:
+        max_wait_limit = int(max_wait_limit) if max_wait_limit != "" else None
+    except Exception:
+        max_wait_limit = None
+
     numbers = get_strategy_numbers(strategy)
 
     if not numbers:
@@ -978,7 +987,6 @@ def backtest_entry():
 
     rows = get_global_rolls_for_stats(wheel_id, window)
 
-    # Convert newest-first to chronological.
     rolls = list(reversed(rows))
     nums = [int(r["number"]) for r in rolls]
 
@@ -1006,28 +1014,30 @@ def backtest_entry():
 
         return values[f] * (c - k) + values[c] * (k - f)
 
-    def simulate_threshold(threshold):
+    def simulate_threshold(label, threshold):
         if threshold is None:
             return None
 
         waits = []
 
-        # For each completed delay, if the delay reached the threshold,
-        # entry occurs at threshold and the next hit occurs at full delay.
         for delay in delays:
             if delay >= threshold:
                 waits.append(delay - threshold)
 
         if not waits:
             return {
+                "label": label,
                 "threshold": round(threshold, 2),
                 "entries": 0,
                 "avg_wait": None,
                 "max_wait": None,
+                "success_rolls": success_rolls,
+                "success_rate": None,
                 "hit_within_1": None,
                 "hit_within_3": None,
                 "hit_within_5": None,
                 "hit_within_10": None,
+                "recommendation_score": 0,
             }
 
         def hit_within(n):
@@ -1036,21 +1046,92 @@ def backtest_entry():
                 2
             )
 
+        success_rate = hit_within(success_rolls)
+        avg_wait = round(sum(waits) / len(waits), 2)
+        max_wait = max(waits)
+
+        entry_count_score = min(25, (len(waits) / max(min_entries, 1)) * 25)
+        success_score = (success_rate / 100) * 45
+        max_wait_score = 20 if max_wait_limit is None else max(0, 20 - max(0, max_wait - max_wait_limit) * 4)
+        efficiency_score = max(0, 10 - avg_wait)
+
+        recommendation_score = round(
+            min(100, entry_count_score + success_score + max_wait_score + efficiency_score),
+            2
+        )
+
         return {
+            "label": label,
             "threshold": round(threshold, 2),
             "entries": len(waits),
-            "avg_wait": round(sum(waits) / len(waits), 2),
-            "max_wait": max(waits),
+            "avg_wait": avg_wait,
+            "max_wait": max_wait,
+            "success_rolls": success_rolls,
+            "success_rate": success_rate,
             "hit_within_1": hit_within(1),
             "hit_within_3": hit_within(3),
             "hit_within_5": hit_within(5),
             "hit_within_10": hit_within(10),
+            "recommendation_score": recommendation_score,
         }
 
-    p90 = percentile(delays, 90)
-    p95 = percentile(delays, 95)
-    p97 = percentile(delays, 97)
-    p99 = percentile(delays, 99)
+    tests = {
+        "P90": simulate_threshold("P90", percentile(delays, 90)),
+        "P95": simulate_threshold("P95", percentile(delays, 95)),
+        "P97": simulate_threshold("P97", percentile(delays, 97)),
+        "P99": simulate_threshold("P99", percentile(delays, 99)),
+    }
+
+    eligible = [
+        t for t in tests.values()
+        if t
+        and t["entries"] >= min_entries
+        and t["success_rate"] is not None
+        and (max_wait_limit is None or t["max_wait"] <= max_wait_limit)
+    ]
+
+    if eligible:
+        best = sorted(
+            eligible,
+            key=lambda x: (
+                x["recommendation_score"],
+                x["success_rate"],
+                -x["avg_wait"],
+                x["entries"],
+            ),
+            reverse=True
+        )[0]
+
+        recommended_entry = {
+            "label": best["label"],
+            "threshold": best["threshold"],
+            "entries": best["entries"],
+            "success_rolls": success_rolls,
+            "success_rate": best["success_rate"],
+            "avg_wait": best["avg_wait"],
+            "max_wait": best["max_wait"],
+            "recommendation_score": best["recommendation_score"],
+            "reason": (
+                f"{best['label']} is recommended because it had "
+                f"{best['entries']} historical entries, "
+                f"{best['success_rate']}% hit within {success_rolls} rolls, "
+                f"an average wait of {best['avg_wait']} rolls, "
+                f"and a worst wait of {best['max_wait']} rolls."
+            )
+        }
+    else:
+        recommended_entry = {
+            "label": None,
+            "threshold": None,
+            "reason": (
+                f"No entry met the minimum requirements of "
+                f"{min_entries} historical entries"
+                + (
+                    f" and max wait <= {max_wait_limit}."
+                    if max_wait_limit is not None else "."
+                )
+            )
+        }
 
     return jsonify({
         "ok": True,
@@ -1061,12 +1142,13 @@ def backtest_entry():
         "hit_count": len(hit_indices),
         "delay_count": len(delays),
         "covered_numbers": numbers,
-        "entry_tests": {
-            "P90": simulate_threshold(p90),
-            "P95": simulate_threshold(p95),
-            "P97": simulate_threshold(p97),
-            "P99": simulate_threshold(p99),
-        }
+        "settings": {
+            "success_rolls": success_rolls,
+            "min_entries": min_entries,
+            "max_wait_limit": max_wait_limit,
+        },
+        "entry_tests": tests,
+        "recommended_entry": recommended_entry,
     })
 
 @app.route("/global-roll-timing")
