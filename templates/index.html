@@ -1520,6 +1520,80 @@ function renderNeighborsHeatLegend(maxCount, usedWindow, heatMode) {
     scale.appendChild(swatch);
   });
 }
+function getNeighborsNumbers(centerNumber, neighborCount) {
+  const centerIndex = wheelOrder.indexOf(centerNumber);
+  if (centerIndex === -1) return [];
+  const result = [];
+  for (let offset = -neighborCount; offset <= neighborCount; offset++) {
+    const idx = (centerIndex + offset + wheelOrder.length) % wheelOrder.length;
+    result.push(wheelOrder[idx]);
+  }
+  return result;
+}
+
+function calculateDynamicMartingaleRisk(rollsSince, maxDelay, selectionSize) {
+  const rs = Number(rollsSince);
+  const md = Number(maxDelay);
+  const base = Number(selectionSize);
+  if (!Number.isFinite(rs) || !Number.isFinite(md) || !Number.isFinite(base)) return '';
+  const levels = Math.max(0, md - rs);
+  if (levels > 10) return '';
+  let total = 0;
+  for (let i = 0; i < levels; i++) {
+    total += base * (2 ** i);
+  }
+  if (total > 2000) return '';
+  return `$${total.toLocaleString()}`;
+}
+
+function computeNeighborsStats(rolls, numbers, strategyLabel) {
+  const parsedRolls = (Array.isArray(rolls) ? rolls : [])
+    .map(entry => Number(entry?.number))
+    .filter(num => Number.isInteger(num) && num >= 0 && num <= 36);
+
+  if (!parsedRolls.length || !numbers.length) {
+    return {
+      strategy: strategyLabel,
+      rollsSince: '',
+      avgDelay: '',
+      maxDelay: '',
+      betSignal: '',
+      martingaleRisk: '',
+    };
+  }
+
+  const chronological = [...parsedRolls].reverse();
+  const hitIndices = [];
+  chronological.forEach((num, idx) => {
+    if (numbers.includes(num)) hitIndices.push(idx);
+  });
+
+  const lastHitIndex = hitIndices.length ? hitIndices[hitIndices.length - 1] : null;
+  const rollsSince = lastHitIndex === null ? '' : (chronological.length - 1 - lastHitIndex);
+  const delays = [];
+  for (let i = 1; i < hitIndices.length; i++) {
+    delays.push(hitIndices[i] - hitIndices[i - 1]);
+  }
+  const avgDelay = delays.length ? Number((delays.reduce((sum, v) => sum + v, 0) / delays.length).toFixed(2)) : '';
+  const maxDelay = delays.length ? Math.max(...delays) : '';
+  const betSignal = (rollsSince !== '' && avgDelay !== '') ? (rollsSince >= avgDelay ? '? Consider betting' : '? Wait') : '';
+
+  const martingaleRisk = calculateDynamicMartingaleRisk(
+    rollsSince,
+    maxDelay,
+    numbers.length
+  );
+
+  return {
+    strategy: strategyLabel,
+    rollsSince,
+    avgDelay,
+    maxDelay,
+    betSignal,
+    martingaleRisk,
+  };
+}
+
 
 
   let allData = [];
@@ -2155,80 +2229,6 @@ function sameNumberSet(a, b) {
   const aa = [...new Set(a)].sort((x, y) => x - y);
   const bb = [...new Set(b)].sort((x, y) => x - y);
   return aa.length === bb.length && aa.every((value, index) => value === bb[index]);
-}
-
-function getNeighborsNumbers(centerNumber, neighborCount) {
-  const centerIndex = wheelOrder.indexOf(centerNumber);
-  if (centerIndex === -1) return [];
-  const result = [];
-  for (let offset = -neighborCount; offset <= neighborCount; offset++) {
-    const idx = (centerIndex + offset + wheelOrder.length) % wheelOrder.length;
-    result.push(wheelOrder[idx]);
-  }
-  return result;
-}
-
-function calculateDynamicMartingaleRisk(rollsSince, maxDelay, selectionSize) {
-  const rs = Number(rollsSince);
-  const md = Number(maxDelay);
-  const base = Number(selectionSize);
-  if (!Number.isFinite(rs) || !Number.isFinite(md) || !Number.isFinite(base)) return '';
-  const levels = Math.max(0, md - rs);
-  if (levels > 10) return '';
-  let total = 0;
-  for (let i = 0; i < levels; i++) {
-    total += base * (2 ** i);
-  }
-  if (total > 2000) return '';
-  return `$${total.toLocaleString()}`;
-}
-
-function computeNeighborsStats(rolls, numbers, strategyLabel) {
-  const parsedRolls = (Array.isArray(rolls) ? rolls : [])
-    .map(entry => Number(entry?.number))
-    .filter(num => Number.isInteger(num) && num >= 0 && num <= 36);
-
-  if (!parsedRolls.length || !numbers.length) {
-    return {
-      strategy: strategyLabel,
-      rollsSince: '',
-      avgDelay: '',
-      maxDelay: '',
-      betSignal: '',
-      martingaleRisk: '',
-    };
-  }
-
-  const chronological = [...parsedRolls].reverse();
-  const hitIndices = [];
-  chronological.forEach((num, idx) => {
-    if (numbers.includes(num)) hitIndices.push(idx);
-  });
-
-  const lastHitIndex = hitIndices.length ? hitIndices[hitIndices.length - 1] : null;
-  const rollsSince = lastHitIndex === null ? '' : (chronological.length - 1 - lastHitIndex);
-  const delays = [];
-  for (let i = 1; i < hitIndices.length; i++) {
-    delays.push(hitIndices[i] - hitIndices[i - 1]);
-  }
-  const avgDelay = delays.length ? Number((delays.reduce((sum, v) => sum + v, 0) / delays.length).toFixed(2)) : '';
-  const maxDelay = delays.length ? Math.max(...delays) : '';
-  const betSignal = (rollsSince !== '' && avgDelay !== '') ? (rollsSince >= avgDelay ? '? Consider betting' : '? Wait') : '';
-
-  const martingaleRisk = calculateDynamicMartingaleRisk(
-    rollsSince,
-    maxDelay,
-    numbers.length
-  );
-
-  return {
-    strategy: strategyLabel,
-    rollsSince,
-    avgDelay,
-    maxDelay,
-    betSignal,
-    martingaleRisk,
-  };
 }
 
 
