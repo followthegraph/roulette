@@ -1311,7 +1311,17 @@ function flashTableHeaders() {
 const DASHBOARD_POLL_MS = 5000;
 const GLOBAL_MONITOR_POLL_MS = 30000;
 
-// startup moved to final script block
+// main dashboard refresh
+setInterval(() => {
+  console.log("🔄 Auto-refreshing dashboard data...");
+  fetchData();
+  flashTableHeaders();
+}, DASHBOARD_POLL_MS);
+
+// global monitor refresh
+setInterval(() => {
+  refreshGlobalMonitor();
+}, GLOBAL_MONITOR_POLL_MS);
 
 const dashboardWindows = {};
 
@@ -1432,7 +1442,11 @@ function updateStickyScrollState() {
   }
 }
 
-// startup moved to final script block
+window.addEventListener("scroll", updateStickyScrollState);
+updateStickyScrollState();
+setInterval(updateLastWriteAges, 1000);
+refreshGlobalMonitor();
+fetchData();
 
 
 </script>
@@ -2922,29 +2936,6 @@ document.getElementById("strategyProfileWindow").addEventListener("change", () =
 
 
   </script>
-
-<script>
-// ===============================
-// Startup / initialization LAST
-// ===============================
-window.addEventListener("scroll", updateStickyScrollState);
-updateStickyScrollState();
-
-setInterval(updateLastWriteAges, 1000);
-
-refreshGlobalMonitor();
-fetchData();
-
-setInterval(() => {
-  console.log("🔄 Auto-refreshing dashboard data...");
-  fetchData();
-  flashTableHeaders();
-}, DASHBOARD_POLL_MS);
-
-setInterval(() => {
-  refreshGlobalMonitor();
-}, GLOBAL_MONITOR_POLL_MS);
-</script>
 
   </body>
 </html>
