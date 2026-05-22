@@ -1377,7 +1377,12 @@ function buildUrgencySnapshot(candidates) {
   const top = list.slice(0, 10).map(c => ({
     name: c.name,
     tier: c.tier,
+    score: c.score ?? null,
+    currentPercentile: c.currentPercentile ?? null,
     rollsSince: c.rollsSince,
+    p90: c.p90 ?? null,
+    p95: c.p95 ?? null,
+    p99: c.p99 ?? null,
     maxDelay: c.maxDelay,
     distance: c.distance,
     risk: c.riskLabel || "—"
@@ -1469,16 +1474,43 @@ function buildUrgencyCandidates(dataRows) {
       : rawRollsSince;
     const maxDelay = Number(row['Max Delay']);
     if (!Number.isFinite(rollsSince) || !Number.isFinite(maxDelay)) return;
-    const distance = maxDelay - rollsSince;
-    let tier = null;
-    if (rollsSince >= maxDelay) tier = 'critical';
-    else if (distance >= 1 && distance <= 3) tier = 'imminent';
-    else if (distance >= 4 && distance <= 5) tier = 'watch';
-    else return;
-    const riskLabel =
-      row["Adjusted Martingale Risk"] || row["Martingale Risk"] || "—";
+    const scoreInfo = scoreStrategyRow(row);
+    const score = Number(scoreInfo.score);
+    const currentPercentile = Number(row["Current Percentile"]);
 
+    const riskLabel = row["Adjusted Martingale Risk"] || row["Martingale Risk"] || "";
     const riskValue = parseMoneyValue(riskLabel);
+
+    // Unknown/blank risk = not actionable
+    if (!Number.isFinite(riskValue)) return;
+
+    let tier = null;
+
+    if (
+      score >= 90 ||
+      (Number.isFinite(currentPercentile) && currentPercentile >= 99)
+    ) {
+      tier = "critical";
+    } else if (
+      score >= 80 ||
+      (Number.isFinite(currentPercentile) && currentPercentile >= 97)
+    ) {
+      tier = "critical";
+    } else if (
+      score >= 65 ||
+      (Number.isFinite(currentPercentile) && currentPercentile >= 95)
+    ) {
+      tier = "imminent";
+    } else if (
+      score >= 50 ||
+      (Number.isFinite(currentPercentile) && currentPercentile >= 90)
+    ) {
+      tier = "watch";
+    } else {
+      return;
+    }
+
+    const distance = Number.isFinite(maxDelay) ? maxDelay - rollsSince : null;
     const minNetProfit = estimateMinNetProfit(name);
     const efficiency = (riskValue && minNetProfit !== null && riskValue > 0) ? Number((minNetProfit / riskValue).toFixed(4)) : null;
     const overtimeDetails = getCriticalOvertimeDetails(rawName, tier);
@@ -1501,6 +1533,11 @@ function buildUrgencyCandidates(dataRows) {
       minNetProfit,
       riskLabel,
       category: row['BetType'] || '',
+      score,
+      currentPercentile,
+      p90: Number(row["P90 Delay"]),
+      p95: Number(row["P95 Delay"]),
+      p99: Number(row["P99 Delay"]),
     });
   });
 
@@ -1545,19 +1582,29 @@ function buildUrgencyCandidates(dataRows) {
   }
 
   candidates.sort((a, b) => {
-    const tierRank = {critical: 0, imminent: 1, watch: 2};
-    if (tierRank[a.tier] !== tierRank[b.tier]) return tierRank[a.tier] - tierRank[b.tier];
-    if (a.tier === 'critical' && a.overBy !== b.overBy) return b.overBy - a.overBy;
-    if (a.tier === 'imminent' && a.distance !== b.distance) return a.distance - b.distance;
+    const tierRank = { critical: 0, imminent: 1, watch: 2 };
+
+    if (tierRank[a.tier] !== tierRank[b.tier]) {
+      return tierRank[a.tier] - tierRank[b.tier];
+    }
+
+    const as = Number.isFinite(a.score) ? a.score : -Infinity;
+    const bs = Number.isFinite(b.score) ? b.score : -Infinity;
+    if (as !== bs) return bs - as;
+
+    const ap = Number.isFinite(a.currentPercentile) ? a.currentPercentile : -Infinity;
+    const bp = Number.isFinite(b.currentPercentile) ? b.currentPercentile : -Infinity;
+    if (ap !== bp) return bp - ap;
+
     const ae = a.efficiency === null ? -Infinity : a.efficiency;
     const be = b.efficiency === null ? -Infinity : b.efficiency;
     if (ae !== be) return be - ae;
+
     if (a.coverage !== b.coverage) return b.coverage - a.coverage;
     if (a.rollsSince !== b.rollsSince) return b.rollsSince - a.rollsSince;
+
     return a.name.localeCompare(b.name);
   });
-  return candidates;
-}
 
 
 function getRiskThreshold() {
@@ -1681,7 +1728,12 @@ function renderUrgencyOverlay(dataRows) {
     const tierLabel = tier === 'critical' ? 'Critical' : (tier === 'imminent' ? 'Imminent' : 'Watch');
     fragment.push(`<div class="urgency-tier-label">${tierLabel}</div>`);
     tierItems.forEach(item => {
-      const gapLabel = item.tier === 'critical' ? `+${item.overBy} over` : `${item.distance} away`;
+      const pctLabel = Number.isFinite(item.currentPercentile)
+        ? `${item.currentPercentile}%`
+        : "—";
+
+      const p95Label = Number.isFinite(item.p95) ? item.p95 : "—";
+      const p99Label = Number.isFinite(item.p99) ? item.p99 : "—";
       const effTooltip = String(item.efficiencyTooltip || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
       fragment.push(`
         <button type="button" class="urgency-item ${item.tier}" data-strategy="${item.name.replace(/"/g, '&quot;')}" style="">
@@ -1690,12 +1742,15 @@ function renderUrgencyOverlay(dataRows) {
             <span class="urgency-item-badge">${tierLabel}</span>
           </div>
           <div class="urgency-item-meta">
+            <span>Score: <b>${item.score ?? "—"}</b></span>
+            <span>Percentile: <b>${pctLabel}</b></span>
             <span>RSLH: <b>${item.rollsSince}</b></span>
+            <span>P95: <b>${p95Label}</b></span>
+            <span>P99: <b>${p99Label}</b></span>
             <span>Max: <b>${item.maxDelay}</b></span>
-            <span>${gapLabel}</span>
+            <span>Risk: <b>${item.riskLabel || "—"}</b></span>
             <span>Category: ${item.category || 'General'}</span>
             <span>Cover: ${item.coverage}</span>
-            <span class="urgency-eff" title="${effTooltip}">Eff: ${item.efficiencyLabel}</span>
           </div>
         </button>
       `);
