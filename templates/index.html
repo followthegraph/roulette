@@ -565,6 +565,253 @@ const numberColorMap = {
           }
           updateColdestTicker(lastSeenMap);
         }
+        function updateTopStreetsTicker(data) {
+    const audio = document.getElementById("dingSound");
+    const streetOrder = [
+      "First Street", "Second Street", "Third Street", "Fourth Street",
+      "Fifth Street", "Sixth Street", "Seventh Street", "Eighth Street",
+      "Ninth Street", "Tenth Street", "Eleventh Street", "Twelfth Street"
+    ];
+
+    const stripParentheses = name => name.split("(")[0].trim();
+
+    const streetData = data.filter(row => {
+      const baseName = stripParentheses(row["Betting Strategy"]?.replace(/^'/, ""));
+      return streetOrder.includes(baseName) && row["BetType"] === "General";
+    });
+
+    streetData.sort((a, b) =>
+      parseFloat(b["Rolls Since Last Hit"]) - parseFloat(a["Rolls Since Last Hit"])
+    );
+
+    const limit = getStreetLimit();
+    const topN = streetData.slice(0, limit);
+    const topStreetNames = topN.map(row =>
+      stripParentheses(row["Betting Strategy"]?.replace(/^'/, ""))
+    );
+
+    topStreetNames.sort((a, b) =>
+      streetOrder.indexOf(a) - streetOrder.indexOf(b)
+    );
+
+    const range1 = new Set(Array.from({ length: 12 }, (_, i) => i + 1));   // 1–12
+    const range2 = new Set(Array.from({ length: 12 }, (_, i) => i + 13));  // 13–24
+    const range3 = new Set(Array.from({ length: 12 }, (_, i) => i + 25));  // 25–36
+
+    // 💡 NEW LOGIC: Track max delay of Nth-hottest street across 500 rolls
+    const recentRolls = Array.isArray(window.latestRolls) ? window.latestRolls : [];
+    const streetNames = streetOrder;
+    const delays = {};
+    const maxNthDelays = [];
+
+    streetNames.forEach(name => delays[name] = 0);
+
+    for (let i = recentRolls.length - 1; i >= 0; i--) {
+      const roll = recentRolls[i];
+      const num = parseInt(roll.number);
+      if (isNaN(num)) continue;
+
+      for (const street of streetNames) {
+        const nums = generalBets[street] || [];
+        if (nums.includes(num)) {
+          delays[street] = 0;
+        } else {
+          delays[street]++;
+        }
+      }
+
+      // After updating delays, sort and get Nth place
+      const sorted = Object.values(delays).sort((a, b) => b - a);
+      if (sorted.length >= limit) {
+        maxNthDelays.push(sorted[limit - 1]);
+      }
+    }
+
+    const maxDelayAcrossTop = Math.max(...maxNthDelays);
+    // 🔁 Track max Nth delay at times when spread was satisfied (1st, 2nd, 3rd coverage)
+    const nthDelaysWithSpread = [];
+    const delayState = {};
+    streetNames.forEach(name => delayState[name] = 0);
+
+    for (let i = recentRolls.length - 1; i >= 0; i--) {
+      const roll = recentRolls[i];
+      const num = parseInt(roll.number);
+      if (isNaN(num)) continue;
+
+      for (const street of streetNames) {
+        const nums = generalBets[street] || [];
+        if (nums.includes(num)) {
+          delayState[street] = 0;
+        } else {
+          delayState[street]++;
+        }
+      }
+
+      const sorted = Object.entries(delayState).sort((a, b) => b[1] - a[1]);
+      if (sorted.length < limit) continue;
+
+      const nthDelay = sorted[limit - 1][1];
+      const topSim = sorted.slice(0, limit).map(([name]) => name);
+
+      let s1 = false, s2 = false, s3 = false;
+      for (const name of topSim) {
+        const nums = generalBets[name] || [];
+        for (const n of nums) {
+          if (range1.has(n)) s1 = true;
+          if (range2.has(n)) s2 = true;
+          if (range3.has(n)) s3 = true;
+        }
+      }
+
+      if (s1 && s2 && s3) {
+        nthDelaysWithSpread.push(nthDelay);
+      }
+    }
+
+    const maxNthWithSpread = nthDelaysWithSpread.length > 0
+      ? Math.max(...nthDelaysWithSpread)
+      : 0;
+
+
+    // 🔁 DOM rendering continues
+    const container = document.getElementById("streetTicker");
+    container.innerHTML = "<b style='color:#333;margin-right:8px;'>🏙️ Top Streets:</b>";
+
+    const colorPalette = ["#0066cc", "#cc3300", "#339966", "#9933cc", "#ff9900", "#4444aa", "#aa7744"];
+    const groups = [];
+    let currentGroup = [topStreetNames[0]];
+
+    for (let i = 1; i < topStreetNames.length; i++) {
+      const currentIndex = streetOrder.indexOf(topStreetNames[i]);
+      const prevIndex = streetOrder.indexOf(topStreetNames[i - 1]);
+      if (currentIndex === prevIndex + 1) {
+        currentGroup.push(topStreetNames[i]);
+      } else {
+        groups.push(currentGroup);
+        currentGroup = [topStreetNames[i]];
+      }
+    }
+    if (currentGroup.length) groups.push(currentGroup);
+
+    groups.forEach((group, idx) => {
+      const color = colorPalette[idx % colorPalette.length];
+      group.forEach(name => {
+        const fullRow = streetData.find(row =>
+          stripParentheses(row["Betting Strategy"]?.replace(/^'/, "")) === name
+        );
+        const rawLabel = fullRow?.["Betting Strategy"] ?? "";
+        const match = rawLabel.match(/\(([^)]+)\)/);
+        const firstNum = match ? match[1].split(",")[0].trim() : "?";
+
+        const div = document.createElement("div");
+        div.textContent = `${name.replace(" Street", "")} (${firstNum})`;
+        div.style.backgroundColor = color;
+        div.style.color = "white";
+        div.style.padding = "6px 8px";
+        div.style.borderRadius = "4px";
+        div.style.marginRight = "6px";
+        container.appendChild(div);
+      });
+    });
+
+    let labelContainer = document.getElementById("streetStatsLabel");
+    if (!labelContainer) {
+      labelContainer = document.createElement("div");
+      labelContainer.id = "streetStatsLabel";
+      labelContainer.style.marginTop = "10px";
+      labelContainer.style.marginLeft = "150px";
+      labelContainer.style.fontWeight = "bold";
+      labelContainer.style.color = "#333";
+      labelContainer.style.fontSize = "13px";
+      labelContainer.style.display = "inline-block";
+      container.parentElement.insertBefore(labelContainer, container.nextSibling);
+    }
+
+    let maxDelayContainer = document.getElementById("streetMaxDelayLabel");
+    if (!maxDelayContainer) {
+      maxDelayContainer = document.createElement("div");
+      maxDelayContainer.id = "streetMaxDelayLabel";
+      maxDelayContainer.style.marginTop = "6px";
+      maxDelayContainer.style.marginLeft = "150px";
+      maxDelayContainer.style.fontSize = "12px";
+      maxDelayContainer.style.color = "#555";
+      container.parentElement.insertBefore(maxDelayContainer, labelContainer.nextSibling);
+    }
+
+    const nthRow = topN[topN.length - 1];
+    if (nthRow) {
+      const name = stripParentheses(nthRow["Betting Strategy"]?.replace(/^'/, ""));
+      const delay = parseFloat(nthRow["Rolls Since Last Hit"]);
+      labelContainer.textContent = `${name.replace(" Street", "")} – ${delay} Rolls Since Last Hit`;
+      maxDelayContainer.textContent = `📈 Max Delay Ever for Nth Street (N=${limit}): ${maxDelayAcrossTop}`;
+//
+      let groupAlert = document.getElementById("streetGroupCoverageLabel");
+      if (!groupAlert) {
+        groupAlert = document.createElement("div");
+        groupAlert.id = "streetGroupCoverageLabel";
+        groupAlert.style.marginTop = "6px";
+        groupAlert.style.marginLeft = "150px";
+        groupAlert.style.fontSize = "12px";
+        groupAlert.style.fontWeight = "bold";
+        groupAlert.style.padding = "4px 8px";
+        groupAlert.style.borderRadius = "4px";
+        groupAlert.style.display = "inline-block";
+        container.parentElement.insertBefore(groupAlert, maxDelayContainer.nextSibling);
+      }
+
+      let spreadAwareContainer = document.getElementById("nthSpreadAwareDelayLabel");
+      if (!spreadAwareContainer) {
+        spreadAwareContainer = document.createElement("div");
+        spreadAwareContainer.id = "nthSpreadAwareDelayLabel";
+        spreadAwareContainer.style.marginTop = "6px";
+        spreadAwareContainer.style.marginLeft = "150px";
+        spreadAwareContainer.style.fontSize = "12px";
+        spreadAwareContainer.style.color = "#555";
+        spreadAwareContainer.style.display = "inline-block";
+        container.parentElement.insertBefore(spreadAwareContainer, groupAlert.nextSibling);
+      }
+
+      spreadAwareContainer.textContent = `📊 Max Nth Delay (with spread): ${maxNthWithSpread}`;
+
+      let hasRange1 = false;
+      let hasRange2 = false;
+      let hasRange3 = false;
+
+      for (const street of topStreetNames) {
+        const nums = generalBets[street] || [];
+        for (const n of nums) {
+          if (range1.has(n)) hasRange1 = true;
+          if (range2.has(n)) hasRange2 = true;
+          if (range3.has(n)) hasRange3 = true;
+        }
+      }
+
+      if (hasRange1 && hasRange2 && hasRange3) {
+        groupAlert.textContent = "✅ Spread covers 1st, 2nd, and 3rd & 12 sections.";
+        groupAlert.style.backgroundColor = "#d4edda";
+        groupAlert.style.color = "#155724";
+        groupAlert.style.border = "1px solid #c3e6cb";
+      } else {
+        groupAlert.textContent = "⚠️ Incomplete spread — avoid street bet.";
+        groupAlert.style.backgroundColor = "#f8d7da";
+        groupAlert.style.color = "#721c24";
+        groupAlert.style.border = "1px solid #f5c6cb";
+      }
+
+//
+      if (!isNaN(delay) && delay >= 15) {
+        labelContainer.style.backgroundColor = "lightgreen";
+        labelContainer.style.padding = "6px 10px";
+        labelContainer.style.borderRadius = "4px";
+        labelContainer.style.animation = "fadeInScale 0.3s ease-out";
+        audio?.play();
+      } else {
+        labelContainer.style.backgroundColor = "transparent";
+        labelContainer.style.padding = "";
+        labelContainer.style.animation = "none";
+      }
+    }
+  }
 
   let allData = [];
 
@@ -2338,253 +2585,6 @@ function updateJustHitTicket(latestNumber) {
     : `<div>No strategy matched the last number (${hit}).</div>`;
 }
 
-  function updateTopStreetsTicker(data) {
-    const audio = document.getElementById("dingSound");
-    const streetOrder = [
-      "First Street", "Second Street", "Third Street", "Fourth Street",
-      "Fifth Street", "Sixth Street", "Seventh Street", "Eighth Street",
-      "Ninth Street", "Tenth Street", "Eleventh Street", "Twelfth Street"
-    ];
-
-    const stripParentheses = name => name.split("(")[0].trim();
-
-    const streetData = data.filter(row => {
-      const baseName = stripParentheses(row["Betting Strategy"]?.replace(/^'/, ""));
-      return streetOrder.includes(baseName) && row["BetType"] === "General";
-    });
-
-    streetData.sort((a, b) =>
-      parseFloat(b["Rolls Since Last Hit"]) - parseFloat(a["Rolls Since Last Hit"])
-    );
-
-    const limit = getStreetLimit();
-    const topN = streetData.slice(0, limit);
-    const topStreetNames = topN.map(row =>
-      stripParentheses(row["Betting Strategy"]?.replace(/^'/, ""))
-    );
-
-    topStreetNames.sort((a, b) =>
-      streetOrder.indexOf(a) - streetOrder.indexOf(b)
-    );
-
-    const range1 = new Set(Array.from({ length: 12 }, (_, i) => i + 1));   // 1–12
-    const range2 = new Set(Array.from({ length: 12 }, (_, i) => i + 13));  // 13–24
-    const range3 = new Set(Array.from({ length: 12 }, (_, i) => i + 25));  // 25–36
-
-    // 💡 NEW LOGIC: Track max delay of Nth-hottest street across 500 rolls
-    const recentRolls = Array.isArray(window.latestRolls) ? window.latestRolls : [];
-    const streetNames = streetOrder;
-    const delays = {};
-    const maxNthDelays = [];
-
-    streetNames.forEach(name => delays[name] = 0);
-
-    for (let i = recentRolls.length - 1; i >= 0; i--) {
-      const roll = recentRolls[i];
-      const num = parseInt(roll.number);
-      if (isNaN(num)) continue;
-
-      for (const street of streetNames) {
-        const nums = generalBets[street] || [];
-        if (nums.includes(num)) {
-          delays[street] = 0;
-        } else {
-          delays[street]++;
-        }
-      }
-
-      // After updating delays, sort and get Nth place
-      const sorted = Object.values(delays).sort((a, b) => b - a);
-      if (sorted.length >= limit) {
-        maxNthDelays.push(sorted[limit - 1]);
-      }
-    }
-
-    const maxDelayAcrossTop = Math.max(...maxNthDelays);
-    // 🔁 Track max Nth delay at times when spread was satisfied (1st, 2nd, 3rd coverage)
-    const nthDelaysWithSpread = [];
-    const delayState = {};
-    streetNames.forEach(name => delayState[name] = 0);
-
-    for (let i = recentRolls.length - 1; i >= 0; i--) {
-      const roll = recentRolls[i];
-      const num = parseInt(roll.number);
-      if (isNaN(num)) continue;
-
-      for (const street of streetNames) {
-        const nums = generalBets[street] || [];
-        if (nums.includes(num)) {
-          delayState[street] = 0;
-        } else {
-          delayState[street]++;
-        }
-      }
-
-      const sorted = Object.entries(delayState).sort((a, b) => b[1] - a[1]);
-      if (sorted.length < limit) continue;
-
-      const nthDelay = sorted[limit - 1][1];
-      const topSim = sorted.slice(0, limit).map(([name]) => name);
-
-      let s1 = false, s2 = false, s3 = false;
-      for (const name of topSim) {
-        const nums = generalBets[name] || [];
-        for (const n of nums) {
-          if (range1.has(n)) s1 = true;
-          if (range2.has(n)) s2 = true;
-          if (range3.has(n)) s3 = true;
-        }
-      }
-
-      if (s1 && s2 && s3) {
-        nthDelaysWithSpread.push(nthDelay);
-      }
-    }
-
-    const maxNthWithSpread = nthDelaysWithSpread.length > 0
-      ? Math.max(...nthDelaysWithSpread)
-      : 0;
-
-
-    // 🔁 DOM rendering continues
-    const container = document.getElementById("streetTicker");
-    container.innerHTML = "<b style='color:#333;margin-right:8px;'>🏙️ Top Streets:</b>";
-
-    const colorPalette = ["#0066cc", "#cc3300", "#339966", "#9933cc", "#ff9900", "#4444aa", "#aa7744"];
-    const groups = [];
-    let currentGroup = [topStreetNames[0]];
-
-    for (let i = 1; i < topStreetNames.length; i++) {
-      const currentIndex = streetOrder.indexOf(topStreetNames[i]);
-      const prevIndex = streetOrder.indexOf(topStreetNames[i - 1]);
-      if (currentIndex === prevIndex + 1) {
-        currentGroup.push(topStreetNames[i]);
-      } else {
-        groups.push(currentGroup);
-        currentGroup = [topStreetNames[i]];
-      }
-    }
-    if (currentGroup.length) groups.push(currentGroup);
-
-    groups.forEach((group, idx) => {
-      const color = colorPalette[idx % colorPalette.length];
-      group.forEach(name => {
-        const fullRow = streetData.find(row =>
-          stripParentheses(row["Betting Strategy"]?.replace(/^'/, "")) === name
-        );
-        const rawLabel = fullRow?.["Betting Strategy"] ?? "";
-        const match = rawLabel.match(/\(([^)]+)\)/);
-        const firstNum = match ? match[1].split(",")[0].trim() : "?";
-
-        const div = document.createElement("div");
-        div.textContent = `${name.replace(" Street", "")} (${firstNum})`;
-        div.style.backgroundColor = color;
-        div.style.color = "white";
-        div.style.padding = "6px 8px";
-        div.style.borderRadius = "4px";
-        div.style.marginRight = "6px";
-        container.appendChild(div);
-      });
-    });
-
-    let labelContainer = document.getElementById("streetStatsLabel");
-    if (!labelContainer) {
-      labelContainer = document.createElement("div");
-      labelContainer.id = "streetStatsLabel";
-      labelContainer.style.marginTop = "10px";
-      labelContainer.style.marginLeft = "150px";
-      labelContainer.style.fontWeight = "bold";
-      labelContainer.style.color = "#333";
-      labelContainer.style.fontSize = "13px";
-      labelContainer.style.display = "inline-block";
-      container.parentElement.insertBefore(labelContainer, container.nextSibling);
-    }
-
-    let maxDelayContainer = document.getElementById("streetMaxDelayLabel");
-    if (!maxDelayContainer) {
-      maxDelayContainer = document.createElement("div");
-      maxDelayContainer.id = "streetMaxDelayLabel";
-      maxDelayContainer.style.marginTop = "6px";
-      maxDelayContainer.style.marginLeft = "150px";
-      maxDelayContainer.style.fontSize = "12px";
-      maxDelayContainer.style.color = "#555";
-      container.parentElement.insertBefore(maxDelayContainer, labelContainer.nextSibling);
-    }
-
-    const nthRow = topN[topN.length - 1];
-    if (nthRow) {
-      const name = stripParentheses(nthRow["Betting Strategy"]?.replace(/^'/, ""));
-      const delay = parseFloat(nthRow["Rolls Since Last Hit"]);
-      labelContainer.textContent = `${name.replace(" Street", "")} – ${delay} Rolls Since Last Hit`;
-      maxDelayContainer.textContent = `📈 Max Delay Ever for Nth Street (N=${limit}): ${maxDelayAcrossTop}`;
-//
-      let groupAlert = document.getElementById("streetGroupCoverageLabel");
-      if (!groupAlert) {
-        groupAlert = document.createElement("div");
-        groupAlert.id = "streetGroupCoverageLabel";
-        groupAlert.style.marginTop = "6px";
-        groupAlert.style.marginLeft = "150px";
-        groupAlert.style.fontSize = "12px";
-        groupAlert.style.fontWeight = "bold";
-        groupAlert.style.padding = "4px 8px";
-        groupAlert.style.borderRadius = "4px";
-        groupAlert.style.display = "inline-block";
-        container.parentElement.insertBefore(groupAlert, maxDelayContainer.nextSibling);
-      }
-
-      let spreadAwareContainer = document.getElementById("nthSpreadAwareDelayLabel");
-      if (!spreadAwareContainer) {
-        spreadAwareContainer = document.createElement("div");
-        spreadAwareContainer.id = "nthSpreadAwareDelayLabel";
-        spreadAwareContainer.style.marginTop = "6px";
-        spreadAwareContainer.style.marginLeft = "150px";
-        spreadAwareContainer.style.fontSize = "12px";
-        spreadAwareContainer.style.color = "#555";
-        spreadAwareContainer.style.display = "inline-block";
-        container.parentElement.insertBefore(spreadAwareContainer, groupAlert.nextSibling);
-      }
-
-      spreadAwareContainer.textContent = `📊 Max Nth Delay (with spread): ${maxNthWithSpread}`;
-
-      let hasRange1 = false;
-      let hasRange2 = false;
-      let hasRange3 = false;
-
-      for (const street of topStreetNames) {
-        const nums = generalBets[street] || [];
-        for (const n of nums) {
-          if (range1.has(n)) hasRange1 = true;
-          if (range2.has(n)) hasRange2 = true;
-          if (range3.has(n)) hasRange3 = true;
-        }
-      }
-
-      if (hasRange1 && hasRange2 && hasRange3) {
-        groupAlert.textContent = "✅ Spread covers 1st, 2nd, and 3rd & 12 sections.";
-        groupAlert.style.backgroundColor = "#d4edda";
-        groupAlert.style.color = "#155724";
-        groupAlert.style.border = "1px solid #c3e6cb";
-      } else {
-        groupAlert.textContent = "⚠️ Incomplete spread — avoid street bet.";
-        groupAlert.style.backgroundColor = "#f8d7da";
-        groupAlert.style.color = "#721c24";
-        groupAlert.style.border = "1px solid #f5c6cb";
-      }
-
-//
-      if (!isNaN(delay) && delay >= 15) {
-        labelContainer.style.backgroundColor = "lightgreen";
-        labelContainer.style.padding = "6px 10px";
-        labelContainer.style.borderRadius = "4px";
-        labelContainer.style.animation = "fadeInScale 0.3s ease-out";
-        audio?.play();
-      } else {
-        labelContainer.style.backgroundColor = "transparent";
-        labelContainer.style.padding = "";
-        labelContainer.style.animation = "none";
-      }
-    }
-  }
 
   document.addEventListener("click", () => {
     const audio = document.getElementById('dingSound');
