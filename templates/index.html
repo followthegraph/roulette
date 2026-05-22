@@ -1188,6 +1188,87 @@ function buildUrgencySnapshot(candidates) {
       }
     }
   }
+  function updateNeighborsPanel(rolls) {
+  populateNeighborsControls();
+  const centerSelect = document.getElementById('neighborsCenterSelect');
+  const countSelect = document.getElementById('neighborsCountSelect');
+  if (!centerSelect || !countSelect) return;
+
+  const heatInput = document.getElementById('neighborsHeatRollCount');
+  const heatModeSelect = document.getElementById('neighborsHeatModeSelect');
+  const centerNumber = Number(centerSelect.value || 0);
+  const neighborCount = Number(countSelect.value || 1);
+  const heatWindow = sanitizeNeighborsHeatWindow(heatInput?.value || 50, 25);
+  if (heatInput) {
+    const sanitizedDisplay = sanitizeNeighborsHeatWindow(heatInput.value, 25);
+    if (document.activeElement !== heatInput || /^\d+$/.test(String(heatInput.value).trim()) === false || Number(heatInput.value) > 500 || Number(heatInput.value) < 1) {
+      heatInput.value = String(sanitizedDisplay);
+    }
+  }
+  if (heatInput) heatInput.value = String(heatWindow);
+  const heatMode = (heatModeSelect && ['neutral', 'roulette'].includes(heatModeSelect.value)) ? heatModeSelect.value : 'neutral';
+  const numbers = getNeighborsNumbers(centerNumber, neighborCount);
+  const strategyLabel = `Neighbors: ${centerNumber} ± ${neighborCount}`;
+  const stats = computeNeighborsStats(rolls, numbers, strategyLabel);
+  const ascending = [...numbers].sort((a, b) => a - b);
+
+  const exactMatch = frenchBetNames.find(name => sameNumberSet(numbers, generalBets[name] || [])) || '';
+  const exactMatchEl = document.getElementById('neighborsExactMatch');
+  if (exactMatchEl) {
+    exactMatchEl.textContent = exactMatch ? `Exact Match: ${exactMatch}` : 'Exact Match: None';
+    exactMatchEl.style.background = exactMatch ? '#d4edda' : '#eee';
+    exactMatchEl.style.color = exactMatch ? '#155724' : '#333';
+  }
+
+  const titleEl = document.getElementById('neighborsPanelTitle');
+  if (titleEl) titleEl.textContent = `${centerNumber} ± ${neighborCount}`;
+  const wheelEl = document.getElementById('neighborsWheelOrder');
+  if (wheelEl) wheelEl.textContent = numbers.join(', ');
+  const ascEl = document.getElementById('neighborsAscending');
+  if (ascEl) ascEl.textContent = ascending.join(', ');
+
+  const heatInfo = getNeighborsHeatCounts(rolls, heatWindow);
+  renderNeighborsHeatLegend(heatInfo.maxCount, heatInfo.usedWindow, heatMode);
+  renderNeighborsRacetrack(numbers, centerNumber, heatInfo.counts, heatInfo.usedWindow, heatInfo.maxCount, heatMode, urgencyHighlightState.numbers);
+  updateNeighborsTopDroughts(rolls);
+
+  const row = document.getElementById('neighborsStatsRow');
+  if (!row) return;
+  row.innerHTML = '';
+
+  const cells = [
+    stats.strategy,
+    stats.rollsSince,
+    stats.avgDelay,
+    stats.maxDelay,
+    stats.betSignal,
+    stats.martingaleRisk,
+  ];
+
+  cells.forEach((value, index) => {
+    const td = document.createElement('td');
+    td.textContent = value === undefined || value === null ? '' : String(value);
+    if (index === 4 && value === '? Consider betting') td.classList.add('highlight');
+    row.appendChild(td);
+  });
+}
+
+function updateJustHitTicket(latestNumber) {
+  const container = document.getElementById("justHitTicket");
+  const hit = parseInt(latestNumber);
+  const matches = [];
+
+  Object.entries(generalBets).forEach(([strategy, nums]) => {
+    if (nums.includes(hit)) {
+      const numsList = nums.map(n => n === hit ? `<b style="color:red">${n}</b>` : n).join(", ");
+      matches.push(`<div><b>${displayStrategyName(strategy)}</b>: ${numsList}</div>`);
+    }
+  });
+
+  container.innerHTML = matches.length
+    ? `<div style="margin-bottom: 5px;">🎯 <b>Strategies that hit ${hit}:</b></div>` + matches.join("")
+    : `<div>No strategy matched the last number (${hit}).</div>`;
+}
 
   let allData = [];
 
@@ -2542,91 +2623,6 @@ function renderNeighborsRacetrack(numbers, centerNumber, heatCounts = {}, heatWi
     container.appendChild(chip);
   });
 }
-
-
-
-function updateNeighborsPanel(rolls) {
-  populateNeighborsControls();
-  const centerSelect = document.getElementById('neighborsCenterSelect');
-  const countSelect = document.getElementById('neighborsCountSelect');
-  if (!centerSelect || !countSelect) return;
-
-  const heatInput = document.getElementById('neighborsHeatRollCount');
-  const heatModeSelect = document.getElementById('neighborsHeatModeSelect');
-  const centerNumber = Number(centerSelect.value || 0);
-  const neighborCount = Number(countSelect.value || 1);
-  const heatWindow = sanitizeNeighborsHeatWindow(heatInput?.value || 50, 25);
-  if (heatInput) {
-    const sanitizedDisplay = sanitizeNeighborsHeatWindow(heatInput.value, 25);
-    if (document.activeElement !== heatInput || /^\d+$/.test(String(heatInput.value).trim()) === false || Number(heatInput.value) > 500 || Number(heatInput.value) < 1) {
-      heatInput.value = String(sanitizedDisplay);
-    }
-  }
-  if (heatInput) heatInput.value = String(heatWindow);
-  const heatMode = (heatModeSelect && ['neutral', 'roulette'].includes(heatModeSelect.value)) ? heatModeSelect.value : 'neutral';
-  const numbers = getNeighborsNumbers(centerNumber, neighborCount);
-  const strategyLabel = `Neighbors: ${centerNumber} ± ${neighborCount}`;
-  const stats = computeNeighborsStats(rolls, numbers, strategyLabel);
-  const ascending = [...numbers].sort((a, b) => a - b);
-
-  const exactMatch = frenchBetNames.find(name => sameNumberSet(numbers, generalBets[name] || [])) || '';
-  const exactMatchEl = document.getElementById('neighborsExactMatch');
-  if (exactMatchEl) {
-    exactMatchEl.textContent = exactMatch ? `Exact Match: ${exactMatch}` : 'Exact Match: None';
-    exactMatchEl.style.background = exactMatch ? '#d4edda' : '#eee';
-    exactMatchEl.style.color = exactMatch ? '#155724' : '#333';
-  }
-
-  const titleEl = document.getElementById('neighborsPanelTitle');
-  if (titleEl) titleEl.textContent = `${centerNumber} ± ${neighborCount}`;
-  const wheelEl = document.getElementById('neighborsWheelOrder');
-  if (wheelEl) wheelEl.textContent = numbers.join(', ');
-  const ascEl = document.getElementById('neighborsAscending');
-  if (ascEl) ascEl.textContent = ascending.join(', ');
-
-  const heatInfo = getNeighborsHeatCounts(rolls, heatWindow);
-  renderNeighborsHeatLegend(heatInfo.maxCount, heatInfo.usedWindow, heatMode);
-  renderNeighborsRacetrack(numbers, centerNumber, heatInfo.counts, heatInfo.usedWindow, heatInfo.maxCount, heatMode, urgencyHighlightState.numbers);
-  updateNeighborsTopDroughts(rolls);
-
-  const row = document.getElementById('neighborsStatsRow');
-  if (!row) return;
-  row.innerHTML = '';
-
-  const cells = [
-    stats.strategy,
-    stats.rollsSince,
-    stats.avgDelay,
-    stats.maxDelay,
-    stats.betSignal,
-    stats.martingaleRisk,
-  ];
-
-  cells.forEach((value, index) => {
-    const td = document.createElement('td');
-    td.textContent = value === undefined || value === null ? '' : String(value);
-    if (index === 4 && value === '? Consider betting') td.classList.add('highlight');
-    row.appendChild(td);
-  });
-}
-
-function updateJustHitTicket(latestNumber) {
-  const container = document.getElementById("justHitTicket");
-  const hit = parseInt(latestNumber);
-  const matches = [];
-
-  Object.entries(generalBets).forEach(([strategy, nums]) => {
-    if (nums.includes(hit)) {
-      const numsList = nums.map(n => n === hit ? `<b style="color:red">${n}</b>` : n).join(", ");
-      matches.push(`<div><b>${displayStrategyName(strategy)}</b>: ${numsList}</div>`);
-    }
-  });
-
-  container.innerHTML = matches.length
-    ? `<div style="margin-bottom: 5px;">🎯 <b>Strategies that hit ${hit}:</b></div>` + matches.join("")
-    : `<div>No strategy matched the last number (${hit}).</div>`;
-}
-
 
   document.addEventListener("click", () => {
     const audio = document.getElementById('dingSound');
