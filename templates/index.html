@@ -1394,6 +1394,132 @@ function renderNeighborsRacetrack(numbers, centerNumber, heatCounts = {}, heatWi
     container.appendChild(chip);
   });
 }
+function sanitizeNeighborsHeatWindow(value, fallback = 25) {
+  const raw = String(value ?? '').trim();
+  if (!raw || !/^\d+$/.test(raw)) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 500) return fallback;
+  return Math.floor(parsed);
+}
+
+function getNeighborsHeatCounts(rolls, windowSize) {
+  const parsedRolls = (Array.isArray(rolls) ? rolls : [])
+    .map(entry => Number(entry?.number))
+    .filter(num => Number.isInteger(num) && num >= 0 && num <= 36)
+    .slice(0, windowSize);
+
+  const counts = {};
+  for (let i = 0; i <= 36; i++) counts[i] = 0;
+  parsedRolls.forEach(num => { counts[num] = (counts[num] || 0) + 1; });
+  let maxCount = 0;
+  Object.values(counts).forEach(v => { if (v > maxCount) maxCount = v; });
+  return { counts, usedWindow: parsedRolls.length, maxCount };
+}
+
+function interpolateColor(start, end, factor) {
+  const f = Math.max(0, Math.min(1, factor));
+  const out = start.map((value, idx) => Math.round(value + (end[idx] - value) * f));
+  return `rgb(${out[0]}, ${out[1]}, ${out[2]})`;
+}
+
+function getHeatPaletteColor(ratio, mode, num) {
+  const r = Math.max(0, Math.min(1, ratio));
+
+  if (mode === 'roulette') {
+    if (num === 0) {
+      if (r <= 0.2) return '#dff6e7';
+      if (r <= 0.4) return '#9fe0b1';
+      if (r <= 0.6) return '#48be73';
+      if (r <= 0.8) return '#15803d';
+      return '#0b5d2a';
+    }
+    if (numberColorMap[num] === 'red') {
+      if (r <= 0.2) return '#ffe1e1';
+      if (r <= 0.4) return '#ff9f7a';
+      if (r <= 0.6) return '#ffb703';
+      if (r <= 0.8) return '#ff5a36';
+      return '#c1121f';
+    }
+    if (r <= 0.2) return '#e3ecff';
+    if (r <= 0.4) return '#8ecae6';
+    if (r <= 0.6) return '#219ebc';
+    if (r <= 0.8) return '#4361ee';
+    return '#1d3557';
+  }
+
+  if (r <= 0.0001) return '#e8f4ff';
+  if (r <= 0.2) return '#9bd7ff';
+  if (r <= 0.4) return '#4ea8de';
+  if (r <= 0.6) return '#ffd166';
+  if (r <= 0.8) return '#ff8c42';
+  return '#d62828';
+}
+
+function getRacetrackHeatStyle(num, count, maxCount, heatMode) {
+  if (!count || maxCount <= 0) {
+    return {
+      background: '#f5f5f5',
+      text: (heatMode === 'roulette') ? (num === 0 ? '#0b6b2f' : (numberColorMap[num] === 'red' ? '#8b0000' : '#111')) : '#333'
+    };
+  }
+
+  const ratio = count / maxCount;
+  const background = getHeatPaletteColor(ratio, heatMode, num);
+  return {
+    background,
+    text: ratio >= 0.55 ? '#fff' : '#111'
+  };
+}
+
+function renderNeighborsHeatLegend(maxCount, usedWindow, heatMode) {
+  const header = document.getElementById('neighborsHeatLegendHeader');
+  const scale = document.getElementById('neighborsHeatLegendScale');
+  if (!header || !scale) return;
+
+  header.textContent = `Racetrack Heat Legend (last ${usedWindow} rolls)`;
+  scale.innerHTML = '';
+
+  if (!maxCount || maxCount <= 0) {
+    const empty = document.createElement('div');
+    empty.textContent = 'No hits available yet.';
+    empty.style.color = '#666';
+    scale.appendChild(empty);
+    return;
+  }
+
+  const thresholds = [0, 0.2, 0.4, 0.6, 0.8, 1];
+  thresholds.forEach((threshold, idx) => {
+    const swatch = document.createElement('div');
+    swatch.style.display = 'inline-flex';
+    swatch.style.alignItems = 'center';
+    swatch.style.gap = '6px';
+    swatch.style.marginRight = '8px';
+
+    const box = document.createElement('span');
+    box.style.display = 'inline-block';
+    box.style.width = '18px';
+    box.style.height = '18px';
+    box.style.borderRadius = '4px';
+    box.style.border = '1px solid rgba(0,0,0,0.2)';
+    box.style.background = getHeatPaletteColor(threshold, heatMode, 7);
+
+    const label = document.createElement('span');
+    let minCount = idx === 0 ? 0 : Math.max(1, Math.floor(maxCount * thresholds[idx - 1]) + 1);
+    let maxBucket = idx === thresholds.length - 1 ? maxCount : Math.max(minCount, Math.floor(maxCount * threshold));
+    if (idx === 0) {
+      label.textContent = '0';
+      box.style.background = '#f5f5f5';
+    } else if (minCount === maxBucket) {
+      label.textContent = `~${minCount}`;
+    } else {
+      label.textContent = `~${minCount}-${maxBucket}`;
+    }
+
+    swatch.appendChild(box);
+    swatch.appendChild(label);
+    scale.appendChild(swatch);
+  });
+}
 
 
   let allData = [];
@@ -2498,132 +2624,6 @@ function renderUrgencyOverlay(dataRows) {
   });
 }
 
-function sanitizeNeighborsHeatWindow(value, fallback = 25) {
-  const raw = String(value ?? '').trim();
-  if (!raw || !/^\d+$/.test(raw)) return fallback;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 500) return fallback;
-  return Math.floor(parsed);
-}
-
-function getNeighborsHeatCounts(rolls, windowSize) {
-  const parsedRolls = (Array.isArray(rolls) ? rolls : [])
-    .map(entry => Number(entry?.number))
-    .filter(num => Number.isInteger(num) && num >= 0 && num <= 36)
-    .slice(0, windowSize);
-
-  const counts = {};
-  for (let i = 0; i <= 36; i++) counts[i] = 0;
-  parsedRolls.forEach(num => { counts[num] = (counts[num] || 0) + 1; });
-  let maxCount = 0;
-  Object.values(counts).forEach(v => { if (v > maxCount) maxCount = v; });
-  return { counts, usedWindow: parsedRolls.length, maxCount };
-}
-
-function interpolateColor(start, end, factor) {
-  const f = Math.max(0, Math.min(1, factor));
-  const out = start.map((value, idx) => Math.round(value + (end[idx] - value) * f));
-  return `rgb(${out[0]}, ${out[1]}, ${out[2]})`;
-}
-
-function getHeatPaletteColor(ratio, mode, num) {
-  const r = Math.max(0, Math.min(1, ratio));
-
-  if (mode === 'roulette') {
-    if (num === 0) {
-      if (r <= 0.2) return '#dff6e7';
-      if (r <= 0.4) return '#9fe0b1';
-      if (r <= 0.6) return '#48be73';
-      if (r <= 0.8) return '#15803d';
-      return '#0b5d2a';
-    }
-    if (numberColorMap[num] === 'red') {
-      if (r <= 0.2) return '#ffe1e1';
-      if (r <= 0.4) return '#ff9f7a';
-      if (r <= 0.6) return '#ffb703';
-      if (r <= 0.8) return '#ff5a36';
-      return '#c1121f';
-    }
-    if (r <= 0.2) return '#e3ecff';
-    if (r <= 0.4) return '#8ecae6';
-    if (r <= 0.6) return '#219ebc';
-    if (r <= 0.8) return '#4361ee';
-    return '#1d3557';
-  }
-
-  if (r <= 0.0001) return '#e8f4ff';
-  if (r <= 0.2) return '#9bd7ff';
-  if (r <= 0.4) return '#4ea8de';
-  if (r <= 0.6) return '#ffd166';
-  if (r <= 0.8) return '#ff8c42';
-  return '#d62828';
-}
-
-function getRacetrackHeatStyle(num, count, maxCount, heatMode) {
-  if (!count || maxCount <= 0) {
-    return {
-      background: '#f5f5f5',
-      text: (heatMode === 'roulette') ? (num === 0 ? '#0b6b2f' : (numberColorMap[num] === 'red' ? '#8b0000' : '#111')) : '#333'
-    };
-  }
-
-  const ratio = count / maxCount;
-  const background = getHeatPaletteColor(ratio, heatMode, num);
-  return {
-    background,
-    text: ratio >= 0.55 ? '#fff' : '#111'
-  };
-}
-
-function renderNeighborsHeatLegend(maxCount, usedWindow, heatMode) {
-  const header = document.getElementById('neighborsHeatLegendHeader');
-  const scale = document.getElementById('neighborsHeatLegendScale');
-  if (!header || !scale) return;
-
-  header.textContent = `Racetrack Heat Legend (last ${usedWindow} rolls)`;
-  scale.innerHTML = '';
-
-  if (!maxCount || maxCount <= 0) {
-    const empty = document.createElement('div');
-    empty.textContent = 'No hits available yet.';
-    empty.style.color = '#666';
-    scale.appendChild(empty);
-    return;
-  }
-
-  const thresholds = [0, 0.2, 0.4, 0.6, 0.8, 1];
-  thresholds.forEach((threshold, idx) => {
-    const swatch = document.createElement('div');
-    swatch.style.display = 'inline-flex';
-    swatch.style.alignItems = 'center';
-    swatch.style.gap = '6px';
-    swatch.style.marginRight = '8px';
-
-    const box = document.createElement('span');
-    box.style.display = 'inline-block';
-    box.style.width = '18px';
-    box.style.height = '18px';
-    box.style.borderRadius = '4px';
-    box.style.border = '1px solid rgba(0,0,0,0.2)';
-    box.style.background = getHeatPaletteColor(threshold, heatMode, 7);
-
-    const label = document.createElement('span');
-    let minCount = idx === 0 ? 0 : Math.max(1, Math.floor(maxCount * thresholds[idx - 1]) + 1);
-    let maxBucket = idx === thresholds.length - 1 ? maxCount : Math.max(minCount, Math.floor(maxCount * threshold));
-    if (idx === 0) {
-      label.textContent = '0';
-      box.style.background = '#f5f5f5';
-    } else if (minCount === maxBucket) {
-      label.textContent = `~${minCount}`;
-    } else {
-      label.textContent = `~${minCount}-${maxBucket}`;
-    }
-
-    swatch.appendChild(box);
-    swatch.appendChild(label);
-    scale.appendChild(swatch);
-  });
-}
 
 
   document.addEventListener("click", () => {
