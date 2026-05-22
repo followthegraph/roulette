@@ -961,6 +961,114 @@ def strategy_profile():
 
     return jsonify(profile)
 
+@app.route("/backtest-entry.json")
+def backtest_entry():
+    wheel_id = request.args.get("wheel_id") or WHEEL_ID
+    strategy = request.args.get("strategy", "").lstrip("'").strip()
+    window = request.args.get("window", "500")
+
+    numbers = get_strategy_numbers(strategy)
+
+    if not numbers:
+        return jsonify({
+            "ok": False,
+            "error": "Unknown strategy",
+            "strategy": strategy
+        }), 404
+
+    rows = get_global_rolls_for_stats(wheel_id, window)
+
+    # Convert newest-first to chronological.
+    rolls = list(reversed(rows))
+    nums = [int(r["number"]) for r in rolls]
+
+    hit_indices = [
+        i for i, n in enumerate(nums)
+        if n in numbers
+    ]
+
+    delays = [
+        hit_indices[i] - hit_indices[i - 1]
+        for i in range(1, len(hit_indices))
+    ]
+
+    def percentile(values, p):
+        if not values:
+            return None
+
+        values = sorted(values)
+        k = (len(values) - 1) * (p / 100)
+        f = int(k)
+        c = min(f + 1, len(values) - 1)
+
+        if f == c:
+            return values[f]
+
+        return values[f] * (c - k) + values[c] * (k - f)
+
+    def simulate_threshold(threshold):
+        if threshold is None:
+            return None
+
+        waits = []
+
+        # For each completed delay, if the delay reached the threshold,
+        # entry occurs at threshold and the next hit occurs at full delay.
+        for delay in delays:
+            if delay >= threshold:
+                waits.append(delay - threshold)
+
+        if not waits:
+            return {
+                "threshold": round(threshold, 2),
+                "entries": 0,
+                "avg_wait": None,
+                "max_wait": None,
+                "hit_within_1": None,
+                "hit_within_3": None,
+                "hit_within_5": None,
+                "hit_within_10": None,
+            }
+
+        def hit_within(n):
+            return round(
+                sum(1 for w in waits if w <= n) / len(waits) * 100,
+                2
+            )
+
+        return {
+            "threshold": round(threshold, 2),
+            "entries": len(waits),
+            "avg_wait": round(sum(waits) / len(waits), 2),
+            "max_wait": max(waits),
+            "hit_within_1": hit_within(1),
+            "hit_within_3": hit_within(3),
+            "hit_within_5": hit_within(5),
+            "hit_within_10": hit_within(10),
+        }
+
+    p90 = percentile(delays, 90)
+    p95 = percentile(delays, 95)
+    p97 = percentile(delays, 97)
+    p99 = percentile(delays, 99)
+
+    return jsonify({
+        "ok": True,
+        "wheel_id": wheel_id,
+        "strategy": strategy,
+        "window": window,
+        "roll_count": len(nums),
+        "hit_count": len(hit_indices),
+        "delay_count": len(delays),
+        "covered_numbers": numbers,
+        "entry_tests": {
+            "P90": simulate_threshold(p90),
+            "P95": simulate_threshold(p95),
+            "P97": simulate_threshold(p97),
+            "P99": simulate_threshold(p99),
+        }
+    })
+
 @app.route("/global-roll-timing")
 # @admin_required
 def global_roll_timing():
