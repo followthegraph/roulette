@@ -1,3 +1,11 @@
+import subprocess
+import threading
+import requests
+import ipaddress
+import pandas as pd
+import json
+import math
+import os
 from flask import Flask, request, jsonify, render_template, redirect, session, url_for
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -5,13 +13,6 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from pathlib import Path
 from datetime import datetime, timezone
 from functools import wraps
-import subprocess
-import threading
-import requests
-import ipaddress
-import pandas as pd
-import json
-import os
 
 try:
     from zoneinfo import ZoneInfo
@@ -1027,7 +1028,7 @@ def backtest_entry():
         if not waits:
             return {
                 "label": label,
-                "threshold": round(threshold, 2),
+                "threshold": math.ceil(threshold),
                 "entries": 0,
                 "avg_wait": None,
                 "max_wait": None,
@@ -1056,16 +1057,15 @@ def backtest_entry():
         efficiency_score = max(0, 10 - avg_wait)
 
         recommendation_score = round(
-            min(100, entry_count_score + success_score + max_wait_score + efficiency_score),
-            2
+            min(100, entry_count_score + success_score + max_wait_score + efficiency_score)
         )
 
         return {
             "label": label,
-            "threshold": round(threshold, 2),
+            "threshold": math.ceil(threshold),
             "entries": len(waits),
             "avg_wait": avg_wait,
-            "max_wait": max_wait,
+            "max_wait": math.ceil(max_wait),
             "success_rolls": success_rolls,
             "success_rate": success_rate,
             "hit_within_1": hit_within(1),
@@ -1090,13 +1090,14 @@ def backtest_entry():
 
         return {
             "label": best["label"],
-            "threshold": best["threshold"],
+            "threshold": math.ceil(best["threshold"]),
             "entries": best["entries"],
             "success_rolls": success_rolls,
             "success_rate": best["success_rate"],
             "avg_wait": best["avg_wait"],
-            "max_wait": best["max_wait"],
+            "max_wait": math.ceil(best["max_wait"]),
             "recommendation_score": best["recommendation_score"],
+            "recommended_bankroll_depth": math.ceil(best["max_wait"]),
             "reason": (
                 f"{prefix}{best['label']} is recommended because it had "
                 f"{best['entries']} historical entries, "
