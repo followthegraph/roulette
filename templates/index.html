@@ -380,13 +380,24 @@
         </div>
 
         <div class="strategy-profile-controls">
-          <label>Window</label>
+          <label>Profile Window</label>
           <select id="strategyProfileWindow">
             <option value="500">Last 500</option>
             <option value="1000">Last 1000</option>
             <option value="2500">Last 2500</option>
             <option value="all">All</option>
           </select>
+        
+          <label>Success Rolls</label>
+          <input id="backtestSuccessRolls" type="number" value="5" min="1" max="25">
+        
+          <label>Min Entries</label>
+          <input id="backtestMinEntries" type="number" value="8" min="1" max="100">
+        
+          <label>Max Wait Limit</label>
+          <input id="backtestMaxWaitLimit" type="number" placeholder="optional" min="1" max="100">
+        
+          <button type="button" id="runBacktestBtn">Run Backtest</button>
         </div>
 
         <div id="strategyProfileBody"></div>
@@ -2959,7 +2970,130 @@ async function openStrategyProfileModal(strategy) {
     <p>${(profile.recent_delays || []).join(", ") || "—"}</p>
     <h3>Covered Numbers</h3>
     <p>${(profile.covered_numbers || []).join(", ")}</p>
+    <div id="entryBacktestBody" class="entry-backtest-body"></div>
   `;
+}
+
+async function fetchEntryBacktest(strategy) {
+  const wheelId = getCurrentWheelId();
+  const windowSize = document.getElementById("strategyProfileWindow")?.value || "500";
+  const successRolls = document.getElementById("backtestSuccessRolls")?.value || "5";
+  const minEntries = document.getElementById("backtestMinEntries")?.value || "8";
+  const maxWaitLimit = document.getElementById("backtestMaxWaitLimit")?.value || "";
+
+  const url =
+    `https://eu.getdatbp.com/backtest-entry.json` +
+    `?wheel_id=${encodeURIComponent(wheelId)}` +
+    `&strategy=${encodeURIComponent(strategy)}` +
+    `&window=${encodeURIComponent(windowSize)}` +
+    `&success_rolls=${encodeURIComponent(successRolls)}` +
+    `&min_entries=${encodeURIComponent(minEntries)}` +
+    (maxWaitLimit ? `&max_wait_limit=${encodeURIComponent(maxWaitLimit)}` : "");
+
+  return fetch(url).then(r => r.json());
+}
+
+function renderRecommendationCard(title, rec, cssClass = "") {
+  if (!rec || !rec.label) {
+    return `
+      <div class="backtest-rec-card ${cssClass}">
+        <h4>${title}</h4>
+        <p>${rec?.reason || "No recommendation available."}</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="backtest-rec-card ${cssClass}">
+      <h4>${title}: ${rec.label}</h4>
+      <div class="backtest-rec-main">
+        Entry at <b>${rec.threshold}</b> rolls |
+        Success <b>${rec.success_rate}%</b> within <b>${rec.success_rolls}</b> rolls |
+        Score <b>${rec.recommendation_score}</b>
+      </div>
+      <p>${rec.reason}</p>
+      <div class="backtest-rec-meta">
+        Entries: <b>${rec.entries}</b> |
+        Avg Wait: <b>${rec.avg_wait}</b> |
+        Worst Wait: <b>${rec.max_wait}</b> |
+        Bankroll Depth: <b>${rec.recommended_bankroll_depth ?? rec.max_wait}</b>
+      </div>
+    </div>
+  `;
+}
+
+function renderEntryTestsTable(entryTests) {
+  const rows = ["P90", "P95", "P97", "P99"]
+    .map(label => entryTests?.[label])
+    .filter(Boolean);
+
+  if (!rows.length) return "<p>No entry tests available.</p>";
+
+  return `
+    <table class="backtest-table">
+      <thead>
+        <tr>
+          <th>Entry</th>
+          <th>Threshold</th>
+          <th>Entries</th>
+          <th>Success</th>
+          <th>≤1</th>
+          <th>≤3</th>
+          <th>≤5</th>
+          <th>≤10</th>
+          <th>Avg Wait</th>
+          <th>Worst</th>
+          <th>Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(r => `
+          <tr>
+            <td>${r.label}</td>
+            <td>${r.threshold ?? "—"}</td>
+            <td>${r.entries ?? "—"}</td>
+            <td>${r.success_rate ?? "—"}%</td>
+            <td>${r.hit_within_1 ?? "—"}%</td>
+            <td>${r.hit_within_3 ?? "—"}%</td>
+            <td>${r.hit_within_5 ?? "—"}%</td>
+            <td>${r.hit_within_10 ?? "—"}%</td>
+            <td>${r.avg_wait ?? "—"}</td>
+            <td>${r.max_wait ?? "—"}</td>
+            <td>${r.recommendation_score ?? "—"}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+async function renderEntryBacktest(strategy) {
+  const container = document.getElementById("entryBacktestBody");
+  if (!container) return;
+
+  container.innerHTML = "Running entry simulation...";
+
+  try {
+    const data = await fetchEntryBacktest(strategy);
+
+    if (!data.ok) {
+      container.innerHTML = `<p>Backtest failed: ${data.error || "Unknown error"}</p>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <h3>Entry Simulation</h3>
+
+      ${renderRecommendationCard("Recommended Entry", data.recommended_entry, "primary")}
+      ${renderRecommendationCard("Strict Recommendation", data.strict_recommended_entry, "strict")}
+      ${renderRecommendationCard("Best Available", data.best_available_entry, "available")}
+
+      <h4>Threshold Comparison</h4>
+      ${renderEntryTestsTable(data.entry_tests)}
+    `;
+  } catch (err) {
+    container.innerHTML = `<p>Backtest request failed: ${err.message}</p>`;
+  }
 }
 
 document.getElementById("strategyProfileClose").addEventListener("click", () => {
@@ -2970,6 +3104,11 @@ document.getElementById("strategyProfileWindow").addEventListener("change", () =
   if (activeProfileStrategy) openStrategyProfileModal(activeProfileStrategy);
 });
 
+document.getElementById("runBacktestBtn")?.addEventListener("click", () => {
+  if (activeProfileStrategy) {
+    renderEntryBacktest(activeProfileStrategy);
+  }
+});
 // ===============================
 // Startup / initialization LAST
 // ===============================

@@ -1107,7 +1107,6 @@ def backtest_entry():
             )
         }
 
-
     all_valid = [
         t for t in tests.values()
         if t and t["entries"] > 0 and t["success_rate"] is not None

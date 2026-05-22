@@ -577,3 +577,79 @@
     background: #7f1d1d;
     color: white;
   }
+
+  .strategy-profile-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: end;
+    margin: 12px 0;
+  }
+  
+  .strategy-profile-controls input,
+  .strategy-profile-controls select {
+    padding: 6px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+  }
+  
+  .strategy-profile-controls button {
+    padding: 7px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: #2563eb;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  
+  .entry-backtest-body {
+    margin-top: 18px;
+  }
+  
+  .backtest-rec-card {
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    padding: 12px;
+    margin: 10px 0;
+    background: #f9fafb;
+  }
+  
+  .backtest-rec-card.primary {
+    border-color: #2563eb;
+    background: #eff6ff;
+  }
+  
+  .backtest-rec-card.strict {
+    border-color: #f97316;
+  }
+  
+  .backtest-rec-card.available {
+    border-color: #16a34a;
+  }
+  
+  .backtest-rec-card h4 {
+    margin: 0 0 6px;
+  }
+  
+  .backtest-rec-main,
+  .backtest-rec-meta {
+    font-size: 13px;
+  }
+  
+  .backtest-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  
+  .backtest-table th,
+  .backtest-table td {
+    border: 1px solid #d1d5db;
+    padding: 5px;
+    text-align: center;
+  }
+  
+  .backtest-table th {
+    background: #f3f4f6;
+  }
