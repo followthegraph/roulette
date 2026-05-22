@@ -693,6 +693,98 @@ function getUrgencyThreshold() {
   return sanitizeUrgencyThreshold(input ? input.value : 2000, 2000);
 }
 
+function updateNeighborsTopDroughts(rolls) {
+  const container = document.getElementById('neighborsTopDroughts');
+  const header = document.getElementById('neighborsLocatorHeader');
+  const toggleBtn = document.getElementById('neighborsShowAllToggle');
+  const countSelect = document.getElementById('neighborsCountSelect');
+  if (!container || !header || !toggleBtn || !countSelect) return;
+
+  const neighborCount = Math.max(0, Number(countSelect.value || 1));
+  header.textContent = `Top Current Neighbors Droughts (±${neighborCount})`;
+
+  const parsedRolls = (Array.isArray(rolls) ? rolls : [])
+    .map(entry => Number(entry?.number))
+    .filter(num => Number.isInteger(num) && num >= 0 && num <= 36);
+
+  if (!parsedRolls.length || neighborCount < 1) {
+    container.textContent = neighborCount < 1
+      ? 'Select at least 1 neighbor to view top current droughts.'
+      : '—';
+    toggleBtn.style.display = 'none';
+    toggleBtn.textContent = 'Show All';
+    return;
+  }
+
+  const deduped = new Map();
+  for (const centerNumber of wheelOrder) {
+    const numbers = getNeighborsNumbers(centerNumber, neighborCount);
+    const key = [...numbers].sort((a, b) => a - b).join(',');
+    if (deduped.has(key)) continue;
+    const stats = computeNeighborsStats(rolls, numbers, `${centerNumber} ± ${neighborCount}`);
+    const rollsSince = Number(stats.rollsSince);
+    if (!Number.isFinite(rollsSince)) continue;
+    deduped.set(key, {
+      centerNumber,
+      neighborCount,
+      numbers,
+      rollsSince,
+    });
+  }
+
+  const entries = [...deduped.values()].sort((a, b) =>
+    (b.rollsSince - a.rollsSince) ||
+    (a.neighborCount - b.neighborCount) ||
+    (wheelOrder.indexOf(a.centerNumber) - wheelOrder.indexOf(b.centerNumber))
+  );
+
+  if (!entries.length) {
+    container.textContent = '—';
+    toggleBtn.style.display = 'none';
+    toggleBtn.textContent = 'Show All';
+    return;
+  }
+
+  const expanded = toggleBtn.dataset.expanded === 'true';
+  const baseLimit = Math.min(10, entries.length);
+  let cutoffIndex = baseLimit;
+  if (baseLimit > 0 && baseLimit < entries.length) {
+    const cutoffRolls = entries[baseLimit - 1].rollsSince;
+    while (cutoffIndex < entries.length && entries[cutoffIndex].rollsSince === cutoffRolls) {
+      cutoffIndex += 1;
+    }
+  }
+  const visible = expanded ? entries : entries.slice(0, cutoffIndex);
+
+  container.innerHTML = `<ol style="margin: 0; padding-left: 18px;">${visible.map(entry =>
+    `<li><button type="button" class="neighbors-drought-link" data-center="${entry.centerNumber}" data-count="${entry.neighborCount}" style="background: none; border: none; padding: 0; margin: 0; color: #0645ad; text-decoration: underline; cursor: pointer; font: inherit;">${entry.centerNumber} ± ${entry.neighborCount}</button> (Rolls Since Last Hit: ${entry.rollsSince})</li>`
+  ).join('')}</ol>`;
+
+  if (entries.length > cutoffIndex) {
+    toggleBtn.style.display = 'inline-block';
+    toggleBtn.textContent = expanded ? 'Show Top 10' : 'Show All';
+  } else {
+    toggleBtn.style.display = 'none';
+    toggleBtn.textContent = 'Show All';
+  }
+
+  toggleBtn.onclick = () => {
+    toggleBtn.dataset.expanded = expanded ? 'false' : 'true';
+    updateNeighborsTopDroughts(window.latestRolls || []);
+  };
+
+  container.querySelectorAll('.neighbors-drought-link').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const centerSelect = document.getElementById('neighborsCenterSelect');
+      const countSelectInner = document.getElementById('neighborsCountSelect');
+      if (!centerSelect || !countSelectInner) return;
+      centerSelect.value = String(btn.dataset.center);
+      countSelectInner.value = String(btn.dataset.count);
+      updateNeighborsPanel(window.latestRolls || []);
+    });
+  });
+}
+
 function buildUrgencySnapshot(candidates) {
   const summary = { critical: 0, imminent: 0, watch: 0 };
   const list = Array.isArray(candidates) ? candidates : [];
@@ -2451,97 +2543,7 @@ function renderNeighborsRacetrack(numbers, centerNumber, heatCounts = {}, heatWi
   });
 }
 
-function updateNeighborsTopDroughts(rolls) {
-  const container = document.getElementById('neighborsTopDroughts');
-  const header = document.getElementById('neighborsLocatorHeader');
-  const toggleBtn = document.getElementById('neighborsShowAllToggle');
-  const countSelect = document.getElementById('neighborsCountSelect');
-  if (!container || !header || !toggleBtn || !countSelect) return;
 
-  const neighborCount = Math.max(0, Number(countSelect.value || 1));
-  header.textContent = `Top Current Neighbors Droughts (±${neighborCount})`;
-
-  const parsedRolls = (Array.isArray(rolls) ? rolls : [])
-    .map(entry => Number(entry?.number))
-    .filter(num => Number.isInteger(num) && num >= 0 && num <= 36);
-
-  if (!parsedRolls.length || neighborCount < 1) {
-    container.textContent = neighborCount < 1
-      ? 'Select at least 1 neighbor to view top current droughts.'
-      : '—';
-    toggleBtn.style.display = 'none';
-    toggleBtn.textContent = 'Show All';
-    return;
-  }
-
-  const deduped = new Map();
-  for (const centerNumber of wheelOrder) {
-    const numbers = getNeighborsNumbers(centerNumber, neighborCount);
-    const key = [...numbers].sort((a, b) => a - b).join(',');
-    if (deduped.has(key)) continue;
-    const stats = computeNeighborsStats(rolls, numbers, `${centerNumber} ± ${neighborCount}`);
-    const rollsSince = Number(stats.rollsSince);
-    if (!Number.isFinite(rollsSince)) continue;
-    deduped.set(key, {
-      centerNumber,
-      neighborCount,
-      numbers,
-      rollsSince,
-    });
-  }
-
-  const entries = [...deduped.values()].sort((a, b) =>
-    (b.rollsSince - a.rollsSince) ||
-    (a.neighborCount - b.neighborCount) ||
-    (wheelOrder.indexOf(a.centerNumber) - wheelOrder.indexOf(b.centerNumber))
-  );
-
-  if (!entries.length) {
-    container.textContent = '—';
-    toggleBtn.style.display = 'none';
-    toggleBtn.textContent = 'Show All';
-    return;
-  }
-
-  const expanded = toggleBtn.dataset.expanded === 'true';
-  const baseLimit = Math.min(10, entries.length);
-  let cutoffIndex = baseLimit;
-  if (baseLimit > 0 && baseLimit < entries.length) {
-    const cutoffRolls = entries[baseLimit - 1].rollsSince;
-    while (cutoffIndex < entries.length && entries[cutoffIndex].rollsSince === cutoffRolls) {
-      cutoffIndex += 1;
-    }
-  }
-  const visible = expanded ? entries : entries.slice(0, cutoffIndex);
-
-  container.innerHTML = `<ol style="margin: 0; padding-left: 18px;">${visible.map(entry =>
-    `<li><button type="button" class="neighbors-drought-link" data-center="${entry.centerNumber}" data-count="${entry.neighborCount}" style="background: none; border: none; padding: 0; margin: 0; color: #0645ad; text-decoration: underline; cursor: pointer; font: inherit;">${entry.centerNumber} ± ${entry.neighborCount}</button> (Rolls Since Last Hit: ${entry.rollsSince})</li>`
-  ).join('')}</ol>`;
-
-  if (entries.length > cutoffIndex) {
-    toggleBtn.style.display = 'inline-block';
-    toggleBtn.textContent = expanded ? 'Show Top 10' : 'Show All';
-  } else {
-    toggleBtn.style.display = 'none';
-    toggleBtn.textContent = 'Show All';
-  }
-
-  toggleBtn.onclick = () => {
-    toggleBtn.dataset.expanded = expanded ? 'false' : 'true';
-    updateNeighborsTopDroughts(window.latestRolls || []);
-  };
-
-  container.querySelectorAll('.neighbors-drought-link').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const centerSelect = document.getElementById('neighborsCenterSelect');
-      const countSelectInner = document.getElementById('neighborsCountSelect');
-      if (!centerSelect || !countSelectInner) return;
-      centerSelect.value = String(btn.dataset.center);
-      countSelectInner.value = String(btn.dataset.count);
-      updateNeighborsPanel(window.latestRolls || []);
-    });
-  });
-}
 
 function updateNeighborsPanel(rolls) {
   populateNeighborsControls();
