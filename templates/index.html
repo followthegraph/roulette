@@ -554,6 +554,172 @@ const numberColorMap = {
   35: 'black',
   36: 'red'
 };
+const urgencyHighlightState = {
+  numbers: [],
+  timer: null,
+  expireAt: 0,
+  hold: false,
+};
+
+function normalizeStrategyName(name) {
+  return String(name || '')
+    .replace(/^'/, '')
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .replace(/\s+and\s+/gi, ' & ')
+    .trim();
+}
+
+function displayStrategyName(name) {
+  return String(name || '').replace(/\s+and\s+/gi, ' & ');
+}
+
+function getCoveredNumbersForStrategy(name) {
+  const normalized = normalizeStrategyName(name);
+  return Array.isArray(generalBets[normalized]) ? [...generalBets[normalized]] : [];
+}
+
+function getCoverageSizeForStrategy(name) {
+  return getCoveredNumbersForStrategy(name).length;
+}
+
+function parseMoneyValue(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const num = Number(String(value).replace(/[^\d.-]/g, ''));
+  return Number.isFinite(num) ? num : null;
+}
+
+function estimateMinNetProfit(name) {
+  const normalized = normalizeStrategyName(name);
+  if (normalized === 'Voisins Du Zero') return 1;
+  if (normalized === 'Tiers') return 1;
+  if (normalized === 'Orphelins') return 1;
+  if (normalized === 'Zero') return 1;
+  if (normalized.includes('Street')) return 11;
+  if (normalized.includes('Line')) return 5;
+  if (['1st & 12','2nd & 12','3rd & 12','Top Row','Middle Row','Bottom Row'].includes(normalized)) return 2;
+  if (['1st & 2nd & 12','1st & 3rd & 12','2nd & 3rd & 12','Top & Middle Row','Top & Bottom Row','Middle & Bottom Row'].includes(normalized)) return 1;
+  if (normalized.startsWith('Crossfire,')) return 1;
+  if (['Odds','Even','Red','Black','1 to 18','19 to 36'].includes(normalized)) return 1;
+  return null;
+}
+
+
+function formatStreetSpreadName(limit) {
+  return `Top Streets Spread (N=${limit})`;
+}
+
+function getStreetSpreadMetrics(dataRows, limit) {
+  const streetOrder = [
+    'First Street', 'Second Street', 'Third Street', 'Fourth Street',
+    'Fifth Street', 'Sixth Street', 'Seventh Street', 'Eighth Street',
+    'Ninth Street', 'Tenth Street', 'Eleventh Street', 'Twelfth Street'
+  ];
+  const stripParentheses = name => normalizeStrategyName(name);
+  const streetData = (Array.isArray(dataRows) ? dataRows : []).filter(row => {
+    const baseName = stripParentheses(row['Betting Strategy']);
+    return streetOrder.includes(baseName) && row['BetType'] === 'General';
+  }).map(row => ({...row, baseName: stripParentheses(row['Betting Strategy'])}));
+  streetData.sort((a, b) => Number(b['Rolls Since Last Hit']) - Number(a['Rolls Since Last Hit']));
+  if (!streetData.length || limit < 1) return null;
+  const topN = streetData.slice(0, limit);
+  if (topN.length < limit) return null;
+  const topStreetNames = topN.map(row => row.baseName).sort((a, b) => streetOrder.indexOf(a) - streetOrder.indexOf(b));
+  const topStreetSet = new Set(topStreetNames);
+  const numbers = [...new Set(topStreetNames.flatMap(name => generalBets[name] || []))];
+
+  const range1 = new Set(Array.from({ length: 12 }, (_, i) => i + 1));
+  const range2 = new Set(Array.from({ length: 12 }, (_, i) => i + 13));
+  const range3 = new Set(Array.from({ length: 12 }, (_, i) => i + 25));
+
+  let hasRange1 = false, hasRange2 = false, hasRange3 = false;
+  for (const n of numbers) {
+    if (range1.has(n)) hasRange1 = true;
+    if (range2.has(n)) hasRange2 = true;
+    if (range3.has(n)) hasRange3 = true;
+  }
+  if (!(hasRange1 && hasRange2 && hasRange3)) return null;
+
+  const recentRolls = Array.isArray(window.latestRolls) ? window.latestRolls : [];
+  const delayState = {};
+  streetOrder.forEach(name => delayState[name] = 0);
+  const nthDelaysWithSpread = [];
+  for (let i = recentRolls.length - 1; i >= 0; i--) {
+    const num = parseInt(recentRolls[i]?.number, 10);
+    if (isNaN(num)) continue;
+    for (const street of streetOrder) {
+      const nums = generalBets[street] || [];
+      if (nums.includes(num)) delayState[street] = 0;
+      else delayState[street]++;
+    }
+    const sorted = Object.entries(delayState).sort((a, b) => b[1] - a[1]);
+    if (sorted.length < limit) continue;
+    const nthDelay = sorted[limit - 1][1];
+    const topSim = sorted.slice(0, limit).map(([name]) => name);
+    let s1 = false, s2 = false, s3 = false;
+    for (const name of topSim) {
+      const nums = generalBets[name] || [];
+      for (const n of nums) {
+        if (range1.has(n)) s1 = true;
+        if (range2.has(n)) s2 = true;
+        if (range3.has(n)) s3 = true;
+      }
+    }
+    if (s1 && s2 && s3) nthDelaysWithSpread.push(nthDelay);
+  }
+  const maxNthWithSpread = nthDelaysWithSpread.length ? Math.max(...nthDelaysWithSpread) : null;
+  const currentNth = Number(topN[topN.length - 1]['Rolls Since Last Hit']);
+  return {
+    name: formatStreetSpreadName(limit),
+    topStreetNames,
+    numbers,
+    currentNth,
+    maxNthWithSpread,
+    coverage: numbers.length,
+    limit,
+    category: 'Street Spread',
+  };
+}
+
+function sanitizeUrgencyThreshold(value, fallback = 2000) {
+  const raw = String(value ?? '').trim();
+  if (!raw || !/^\d+$/.test(raw)) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.floor(parsed);
+}
+
+function getUrgencyThreshold() {
+  const input = document.getElementById('urgencyThresholdInput');
+  return sanitizeUrgencyThreshold(input ? input.value : 2000, 2000);
+}
+
+function buildUrgencySnapshot(candidates) {
+  const summary = { critical: 0, imminent: 0, watch: 0 };
+  const list = Array.isArray(candidates) ? candidates : [];
+
+  list.forEach(c => {
+    if (summary[c.tier] !== undefined) {
+      summary[c.tier]++;
+    }
+  });
+
+  const top = list.slice(0, 10).map(c => ({
+    name: c.name,
+    tier: c.tier,
+    score: c.score ?? null,
+    currentPercentile: c.currentPercentile ?? null,
+    rollsSince: c.rollsSince,
+    p90: c.p90 ?? null,
+    p95: c.p95 ?? null,
+    p99: c.p99 ?? null,
+    maxDelay: c.maxDelay,
+    distance: c.distance,
+    risk: c.riskLabel || "—"
+  }));
+
+  return { summary, top };
+}
+
     function getCurrentWheelId() {
         const host = window.location.hostname;
         if (host.includes("flash")) return "flash-wheel";
@@ -1641,171 +1807,7 @@ function computeNeighborsStats(rolls, numbers, strategyLabel) {
 }
 
 
-const urgencyHighlightState = {
-  numbers: [],
-  timer: null,
-  expireAt: 0,
-  hold: false,
-};
 
-function normalizeStrategyName(name) {
-  return String(name || '')
-    .replace(/^'/, '')
-    .replace(/\s*\([^)]*\)\s*$/, '')
-    .replace(/\s+and\s+/gi, ' & ')
-    .trim();
-}
-
-function displayStrategyName(name) {
-  return String(name || '').replace(/\s+and\s+/gi, ' & ');
-}
-
-function getCoveredNumbersForStrategy(name) {
-  const normalized = normalizeStrategyName(name);
-  return Array.isArray(generalBets[normalized]) ? [...generalBets[normalized]] : [];
-}
-
-function getCoverageSizeForStrategy(name) {
-  return getCoveredNumbersForStrategy(name).length;
-}
-
-function parseMoneyValue(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const num = Number(String(value).replace(/[^\d.-]/g, ''));
-  return Number.isFinite(num) ? num : null;
-}
-
-function estimateMinNetProfit(name) {
-  const normalized = normalizeStrategyName(name);
-  if (normalized === 'Voisins Du Zero') return 1;
-  if (normalized === 'Tiers') return 1;
-  if (normalized === 'Orphelins') return 1;
-  if (normalized === 'Zero') return 1;
-  if (normalized.includes('Street')) return 11;
-  if (normalized.includes('Line')) return 5;
-  if (['1st & 12','2nd & 12','3rd & 12','Top Row','Middle Row','Bottom Row'].includes(normalized)) return 2;
-  if (['1st & 2nd & 12','1st & 3rd & 12','2nd & 3rd & 12','Top & Middle Row','Top & Bottom Row','Middle & Bottom Row'].includes(normalized)) return 1;
-  if (normalized.startsWith('Crossfire,')) return 1;
-  if (['Odds','Even','Red','Black','1 to 18','19 to 36'].includes(normalized)) return 1;
-  return null;
-}
-
-
-function formatStreetSpreadName(limit) {
-  return `Top Streets Spread (N=${limit})`;
-}
-
-function getStreetSpreadMetrics(dataRows, limit) {
-  const streetOrder = [
-    'First Street', 'Second Street', 'Third Street', 'Fourth Street',
-    'Fifth Street', 'Sixth Street', 'Seventh Street', 'Eighth Street',
-    'Ninth Street', 'Tenth Street', 'Eleventh Street', 'Twelfth Street'
-  ];
-  const stripParentheses = name => normalizeStrategyName(name);
-  const streetData = (Array.isArray(dataRows) ? dataRows : []).filter(row => {
-    const baseName = stripParentheses(row['Betting Strategy']);
-    return streetOrder.includes(baseName) && row['BetType'] === 'General';
-  }).map(row => ({...row, baseName: stripParentheses(row['Betting Strategy'])}));
-  streetData.sort((a, b) => Number(b['Rolls Since Last Hit']) - Number(a['Rolls Since Last Hit']));
-  if (!streetData.length || limit < 1) return null;
-  const topN = streetData.slice(0, limit);
-  if (topN.length < limit) return null;
-  const topStreetNames = topN.map(row => row.baseName).sort((a, b) => streetOrder.indexOf(a) - streetOrder.indexOf(b));
-  const topStreetSet = new Set(topStreetNames);
-  const numbers = [...new Set(topStreetNames.flatMap(name => generalBets[name] || []))];
-
-  const range1 = new Set(Array.from({ length: 12 }, (_, i) => i + 1));
-  const range2 = new Set(Array.from({ length: 12 }, (_, i) => i + 13));
-  const range3 = new Set(Array.from({ length: 12 }, (_, i) => i + 25));
-
-  let hasRange1 = false, hasRange2 = false, hasRange3 = false;
-  for (const n of numbers) {
-    if (range1.has(n)) hasRange1 = true;
-    if (range2.has(n)) hasRange2 = true;
-    if (range3.has(n)) hasRange3 = true;
-  }
-  if (!(hasRange1 && hasRange2 && hasRange3)) return null;
-
-  const recentRolls = Array.isArray(window.latestRolls) ? window.latestRolls : [];
-  const delayState = {};
-  streetOrder.forEach(name => delayState[name] = 0);
-  const nthDelaysWithSpread = [];
-  for (let i = recentRolls.length - 1; i >= 0; i--) {
-    const num = parseInt(recentRolls[i]?.number, 10);
-    if (isNaN(num)) continue;
-    for (const street of streetOrder) {
-      const nums = generalBets[street] || [];
-      if (nums.includes(num)) delayState[street] = 0;
-      else delayState[street]++;
-    }
-    const sorted = Object.entries(delayState).sort((a, b) => b[1] - a[1]);
-    if (sorted.length < limit) continue;
-    const nthDelay = sorted[limit - 1][1];
-    const topSim = sorted.slice(0, limit).map(([name]) => name);
-    let s1 = false, s2 = false, s3 = false;
-    for (const name of topSim) {
-      const nums = generalBets[name] || [];
-      for (const n of nums) {
-        if (range1.has(n)) s1 = true;
-        if (range2.has(n)) s2 = true;
-        if (range3.has(n)) s3 = true;
-      }
-    }
-    if (s1 && s2 && s3) nthDelaysWithSpread.push(nthDelay);
-  }
-  const maxNthWithSpread = nthDelaysWithSpread.length ? Math.max(...nthDelaysWithSpread) : null;
-  const currentNth = Number(topN[topN.length - 1]['Rolls Since Last Hit']);
-  return {
-    name: formatStreetSpreadName(limit),
-    topStreetNames,
-    numbers,
-    currentNth,
-    maxNthWithSpread,
-    coverage: numbers.length,
-    limit,
-    category: 'Street Spread',
-  };
-}
-
-function sanitizeUrgencyThreshold(value, fallback = 2000) {
-  const raw = String(value ?? '').trim();
-  if (!raw || !/^\d+$/.test(raw)) return fallback;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
-  return Math.floor(parsed);
-}
-
-function getUrgencyThreshold() {
-  const input = document.getElementById('urgencyThresholdInput');
-  return sanitizeUrgencyThreshold(input ? input.value : 2000, 2000);
-}
-
-function buildUrgencySnapshot(candidates) {
-  const summary = { critical: 0, imminent: 0, watch: 0 };
-  const list = Array.isArray(candidates) ? candidates : [];
-
-  list.forEach(c => {
-    if (summary[c.tier] !== undefined) {
-      summary[c.tier]++;
-    }
-  });
-
-  const top = list.slice(0, 10).map(c => ({
-    name: c.name,
-    tier: c.tier,
-    score: c.score ?? null,
-    currentPercentile: c.currentPercentile ?? null,
-    rollsSince: c.rollsSince,
-    p90: c.p90 ?? null,
-    p95: c.p95 ?? null,
-    p99: c.p99 ?? null,
-    maxDelay: c.maxDelay,
-    distance: c.distance,
-    risk: c.riskLabel || "—"
-  }));
-
-  return { summary, top };
-}
 
 async function saveUrgencySnapshot(dataRows) {
   try {
