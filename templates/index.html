@@ -1690,6 +1690,7 @@ function sameNumberSet(a, b) {
 renderTables(true);
 renderUrgencyOverlay(allData);
 saveUrgencySnapshot(allData);
+refreshOpenStrategyModal();
 setTimeout(() => {
   if (typeof rolls !== "undefined" && rolls.length > 0) {
     const lastNumber = rolls[0].number;
@@ -2677,6 +2678,33 @@ function renderUrgencyOverlay(dataRows) {
   });
 
   let activeProfileStrategy = null;
+  let activeProfileRefreshInProgress = false;
+  let lastProfileRefreshKey = "";
+
+  async function refreshOpenStrategyModal() {
+  const modal = document.getElementById("strategyProfileModal");
+
+  if (!activeProfileStrategy) return;
+  if (!modal || modal.classList.contains("hidden")) return;
+  if (activeProfileRefreshInProgress) return;
+
+  const wheelId = getCurrentWheelId();
+  const windowSize = document.getElementById("strategyProfileWindow")?.value || "500";
+  const latestSeq = window.latestRolls?.[0]?.seq || window.latestRolls?.[0]?.created_at_utc || window.latestRolls?.[0]?.number || "";
+
+  const refreshKey = `${wheelId}|${activeProfileStrategy}|${windowSize}|${latestSeq}`;
+
+  if (refreshKey === lastProfileRefreshKey) return;
+
+  lastProfileRefreshKey = refreshKey;
+  activeProfileRefreshInProgress = true;
+
+  try {
+    await openStrategyProfileModal(activeProfileStrategy, { preserveModal: true });
+  } finally {
+    activeProfileRefreshInProgress = false;
+  }
+}
 
 async function fetchStrategyProfile(strategy, windowSize = "500") {
   const wheelId = getCurrentWheelId();
@@ -2948,14 +2976,16 @@ function attachStrategyProfileHandlers() {
   });
 }
 
-async function openStrategyProfileModal(strategy) {
+async function openStrategyProfileModal(strategy, options = {}) {
   const modal = document.getElementById("strategyProfileModal");
   const body = document.getElementById("strategyProfileBody");
   const title = document.getElementById("strategyProfileTitle");
   const subtitle = document.getElementById("strategyProfileSubtitle");
   const windowSize = document.getElementById("strategyProfileWindow").value;
 
-  modal.classList.remove("hidden");
+  if (!options.preserveModal) {
+    modal.classList.remove("hidden");
+  }
   title.textContent = strategy;
   body.innerHTML = "Loading...";
 
@@ -2964,6 +2994,9 @@ async function openStrategyProfileModal(strategy) {
   subtitle.textContent = `${profile.wheel_id} • ${profile.roll_count} rolls • ${profile.hit_count} hits`;
 
   body.innerHTML = `
+    <div class="modal-refresh-note">
+      Updated: ${new Date().toLocaleTimeString()}
+    </div>
     ${renderProfileStats(profile)}
     ${renderHistogram(profile.delays)}
     <h3>Recent Delays</h3>
@@ -2971,6 +3004,45 @@ async function openStrategyProfileModal(strategy) {
     <h3>Covered Numbers</h3>
     <p>${(profile.covered_numbers || []).join(", ")}</p>
     <div id="entryBacktestBody" class="entry-backtest-body"></div>
+  `;
+
+  await renderEntryBacktest(strategy);
+}
+
+function sameRecommendation(a, b) {
+  if (!a || !b) return false;
+  if (!a.label || !b.label) return false;
+
+  return (
+    a.label === b.label &&
+    Number(a.threshold) === Number(b.threshold) &&
+    Number(a.success_rate) === Number(b.success_rate) &&
+    Number(a.max_wait) === Number(b.max_wait)
+  );
+}
+
+function renderRecommendationSummary(data) {
+  const rec = data.recommended_entry;
+  const strict = data.strict_recommended_entry;
+  const best = data.best_available_entry;
+
+  const labels = [];
+
+  if (rec?.label) labels.push("Recommended");
+  if (strict?.label && sameRecommendation(rec, strict)) labels.push("Strict");
+  if (best?.label && sameRecommendation(rec, best)) labels.push("Best Available");
+
+  if (rec?.label) {
+    return renderRecommendationCard(
+      labels.length ? labels.join(" / ") : "Recommended Entry",
+      rec,
+      "primary"
+    );
+  }
+
+  return `
+    ${renderRecommendationCard("Strict Recommendation", strict, "strict")}
+    ${renderRecommendationCard("Best Available", best, "available")}
   `;
 }
 
@@ -3083,11 +3155,7 @@ async function renderEntryBacktest(strategy) {
 
     container.innerHTML = `
       <h3>Entry Simulation</h3>
-
-      ${renderRecommendationCard("Recommended Entry", data.recommended_entry, "primary")}
-      ${renderRecommendationCard("Strict Recommendation", data.strict_recommended_entry, "strict")}
-      ${renderRecommendationCard("Best Available", data.best_available_entry, "available")}
-
+      ${renderRecommendationSummary(data)}
       <h4>Threshold Comparison</h4>
       ${renderEntryTestsTable(data.entry_tests)}
     `;
@@ -3101,7 +3169,7 @@ document.getElementById("strategyProfileClose").addEventListener("click", () => 
 });
 
 document.getElementById("strategyProfileWindow").addEventListener("change", () => {
-  if (activeProfileStrategy) openStrategyProfileModal(activeProfileStrategy);
+  if (activeProfileStrategy) openStrategyProfileModal(activeProfileStrategy, { preserveModal: true });
 });
 
 document.getElementById("runBacktestBtn")?.addEventListener("click", () => {
