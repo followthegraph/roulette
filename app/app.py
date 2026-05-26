@@ -265,6 +265,25 @@ def run_remote_action(server, action):
         "stderr": result.stderr,
     }
 
+def get_base_units_for_strategy(strategy):
+    s = strategy.lower()
+
+    joined_markers = [
+        "crossfire",
+        "top & middle",
+        "top & bottom",
+        "middle & bottom",
+        "1st & 2nd",
+        "1st & 3rd",
+        "2nd & 3rd",
+        "adj street",
+    ]
+
+    if any(m in s for m in joined_markers):
+        return 2
+
+    return 1
+
 def get_strategy_numbers(strategy):
     strategy = str(strategy or "").lstrip("'").strip()
 
@@ -707,6 +726,148 @@ def global_summary():
 
     return jsonify(rows)
 
+@app.route("/profit-sim.json")
+def profit_sim():
+    wheel_id = request.args.get("wheel_id") or WHEEL_ID
+    strategy = request.args.get("strategy", "").lstrip("'").strip()
+    window = request.args.get("window", "2500")
+    entry = request.args.get("entry", "P95").upper()
+
+    unit = float(request.args.get("unit", 1))
+    max_steps = int(request.args.get("max_steps", 8))
+
+    numbers = get_strategy_numbers(strategy)
+
+    if not numbers:
+        return jsonify({
+            "ok": False,
+            "error": "Unknown strategy",
+            "strategy": strategy
+        }), 404
+
+    rows = get_global_rolls_for_stats(wheel_id, window)
+    rolls = list(reversed(rows))
+    nums = [int(r["number"]) for r in rolls]
+
+    hit_indices = [i for i, n in enumerate(nums) if n in numbers]
+
+    delays = [
+        hit_indices[i] - hit_indices[i - 1]
+        for i in range(1, len(hit_indices))
+    ]
+
+    def percentile(values, p):
+        if not values:
+            return None
+
+        values = sorted(values)
+        k = (len(values) - 1) * (p / 100)
+        f = int(k)
+        c = min(f + 1, len(values) - 1)
+
+        if f == c:
+            return values[f]
+
+        return values[f] * (c - k) + values[c] * (k - f)
+
+    percentile_map = {
+        "P90": percentile(delays, 90),
+        "P95": percentile(delays, 95),
+        "P97": percentile(delays, 97),
+        "P99": percentile(delays, 99),
+    }
+
+    threshold = percentile_map.get(entry)
+
+    if threshold is None:
+        return jsonify({
+            "ok": False,
+            "error": "Unable to calculate entry threshold",
+            "strategy": strategy,
+            "entry": entry
+        }), 400
+
+    threshold = int(__import__("math").ceil(threshold))
+
+    base_units = get_base_units_for_strategy(strategy)
+
+    # conservative net profit estimate per winning base unit
+    net_profit_per_unit = estimate_min_net_profit(strategy)
+    if net_profit_per_unit is None:
+        net_profit_per_unit = 1
+
+    trades = []
+    bankroll = 0
+    peak = 0
+    max_drawdown = 0
+
+    for delay in delays:
+        if delay < threshold:
+            continue
+
+        wait_after_entry = delay - threshold
+
+        if wait_after_entry < max_steps:
+            step = wait_after_entry
+            stake_units = base_units * (2 ** step)
+            total_prior_loss_units = base_units * ((2 ** step) - 1)
+
+            profit = (
+                stake_units * net_profit_per_unit * unit
+                - total_prior_loss_units * unit
+            )
+
+            outcome = "win"
+        else:
+            step = max_steps
+            total_loss_units = base_units * ((2 ** max_steps) - 1)
+            profit = -total_loss_units * unit
+            outcome = "loss"
+
+        bankroll += profit
+        peak = max(peak, bankroll)
+        max_drawdown = min(max_drawdown, bankroll - peak)
+
+        trades.append({
+            "outcome": outcome,
+            "delay": delay,
+            "threshold": threshold,
+            "wait_after_entry": wait_after_entry,
+            "step": step,
+            "profit": round(profit, 2),
+            "bankroll_after": round(bankroll, 2)
+        })
+
+    wins = sum(1 for t in trades if t["outcome"] == "win")
+    losses = sum(1 for t in trades if t["outcome"] == "loss")
+    total_profit = round(sum(t["profit"] for t in trades if t["profit"] > 0), 2)
+    total_loss = round(sum(t["profit"] for t in trades if t["profit"] < 0), 2)
+    net_profit = round(bankroll, 2)
+
+    return jsonify({
+        "ok": True,
+        "wheel_id": wheel_id,
+        "strategy": strategy,
+        "window": window,
+        "entry": entry,
+        "threshold": threshold,
+        "unit": unit,
+        "base_units": base_units,
+        "max_steps": max_steps,
+        "net_profit_per_unit": net_profit_per_unit,
+        "roll_count": len(nums),
+        "delay_count": len(delays),
+        "total_entries": len(trades),
+        "wins": wins,
+        "losses": losses,
+        "win_rate": round((wins / len(trades) * 100), 2) if trades else None,
+        "gross_profit": total_profit,
+        "gross_loss": total_loss,
+        "net_profit": net_profit,
+        "average_profit_per_entry": round(net_profit / len(trades), 2) if trades else None,
+        "max_drawdown": round(max_drawdown, 2),
+        "trades": trades[-50:]
+    })
 
 @app.route("/global-latest")
 # @admin_required
