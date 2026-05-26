@@ -821,3 +821,21 @@
     max-height: 280px;
     overflow: auto;
   }
+
+  .best-opportunity-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 6px;
+  }
+  
+  .best-opportunity-badge {
+    display: inline-block;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+  }

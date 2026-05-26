@@ -1705,12 +1705,86 @@ async function renderBestOpportunities(dataRows, options = {}) {
       return;
     }
 
-    bestOpportunitiesLastHtml = items.map(renderOpportunityCard).join("");
+    const collapsedItems = collapseOpportunityItems(items);
+    bestOpportunitiesLastHtml = collapsedItems.map(renderCollapsedOpportunityCard).join("");
     grid.innerHTML = bestOpportunitiesLastHtml;
   } finally {
     grid.classList.remove("best-opportunities-refreshing");
     bestOpportunitiesInProgress = false;
   }
+}
+
+function getCandidateKey(candidate) {
+  return normalizeStrategyName(candidate?.name || "");
+}
+
+function collapseOpportunityItems(items) {
+  const grouped = new Map();
+
+  for (const item of items || []) {
+    if (!item?.candidate) continue;
+
+    const key = getCandidateKey(item.candidate);
+    if (!key) continue;
+
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        candidate: item.candidate,
+        types: [],
+        reasons: [],
+      });
+    }
+
+    const group = grouped.get(key);
+    group.types.push(item.type);
+    group.reasons.push(item.reason);
+  }
+
+  return [...grouped.values()];
+}
+
+function renderCollapsedOpportunityCard(item) {
+  const c = item.candidate;
+  const bt = c.backtest;
+
+  const typeBadges = item.types.map(type => `
+    <span class="best-opportunity-badge">${type}</span>
+  `).join("");
+
+  const reasonText = [...new Set(item.reasons)].join(" ");
+
+  return `
+    <div class="best-opportunity-card">
+      <div class="best-opportunity-badges">${typeBadges}</div>
+      <h3>${displayStrategyName(c.name)}</h3>
+
+      <div class="best-opportunity-reason">${reasonText}</div>
+
+      <div class="best-opportunity-meta">
+        <span>Based on: <b>${getStatsWindowLabel()}</b></span>
+        <span>Score: <b>${c.score}</b></span>
+        <span>Percentile: <b>${c.percentile ?? "—"}%</b></span>
+        <span>Delay: <b>${c.delay}</b></span>
+        <span>Risk: <b>${c.riskLabel}</b></span>
+      </div>
+
+      ${bt ? `
+        <div class="best-opportunity-backtest">
+          Entry: <b>${bt.label}</b> at <b>${bt.threshold}</b> |
+          Success: <b>${bt.success_rate}%</b> within <b>${bt.success_rolls}</b> |
+          Worst: <b>${bt.max_wait}</b>
+        </div>
+      ` : `
+        <div class="best-opportunity-backtest muted">
+          Backtest not available for this card.
+        </div>
+      `}
+
+      <button type="button" onclick="openStrategyProfileModal('${c.name.replace(/'/g, "\\'")}')">
+        Open Profile
+      </button>
+    </div>
+  `;
 }
 
 function updateJustHitTicket(latestNumber) {
