@@ -802,3 +802,22 @@
     font-weight: bold;
     cursor: pointer;
   }
+
+  .best-opportunities-panel {
+    position: sticky;
+    top: 220px;
+    z-index: 2300;
+  }
+  
+  .best-opportunities-panel.collapsed .best-opportunities-grid {
+    display: none;
+  }
+  
+  .best-opportunities-refreshing {
+    opacity: 0.65;
+  }
+
+  .best-opportunities-grid {
+    max-height: 280px;
+    overflow: auto;
+  }

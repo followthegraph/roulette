@@ -209,7 +209,10 @@
           <h2>Best Opportunities</h2>
           <div id="bestOpportunitiesSubtitle"></div>
         </div>
-        <button type="button" id="refreshBestOpportunitiesBtn">Refresh</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="toggleBestOpportunitiesBtn">Collapse</button>
+          <button type="button" id="refreshBestOpportunitiesBtn">Refresh</button>
+        </div>
       </div>
     
       <div id="bestOpportunitiesGrid" class="best-opportunities-grid">
@@ -441,6 +444,9 @@
     window.latestRolls = [];
     let isMouseDown = false;
     let currentlyHeldStrategy = null;
+    let bestOpportunitiesLastKey = "";
+    let bestOpportunitiesInProgress = false;
+    let bestOpportunitiesLastHtml = "";
 
     function getStreetLimit() {
       const input = document.getElementById("streetLimit");
@@ -629,6 +635,16 @@ function getCurrentDelayForRow(row) {
 
 function getOpportunityBase(row) {
   const name = normalizeStrategyName(row["Betting Strategy"]);
+  const betType = String(row["BetType"] || "");
+  const rawStrategy = String(row["Betting Strategy"] || "");
+
+  // Exclude raw number-combo bets like 10/13 or 22/23/25/26.
+  // These are not supported by /backtest-entry.json and are noisy for Best Opportunities.
+  if (/^\s*'?\d+(\/\d+)+\s*$/.test(rawStrategy)) return null;
+
+  // Exclude doubles/quads entirely for now.
+  if (["Doubles", "Quads"].includes(betType)) return null;
+  if (name.includes("/")) return null;
   const scoreInfo = scoreStrategyRow(row);
   const score = Number(scoreInfo.score);
   const percentile = Number(row["Current Percentile"]);
@@ -771,6 +787,7 @@ function renderStrategyConfig() {
       saveStrategyPrefs(prefs);
       renderUrgencyOverlay(allData);
       saveUrgencySnapshot(allData);
+      renderBestOpportunities(allData, { force: true });
     });
   });
 
@@ -785,6 +802,7 @@ function renderStrategyConfig() {
       saveStrategyPrefs(prefs);
       renderUrgencyOverlay(allData);
       saveUrgencySnapshot(allData);
+      renderBestOpportunities(allData, { force: true });
     });
   });
 }
@@ -1637,26 +1655,62 @@ function renderOpportunityCard(item) {
   `;
 }
 
-async function renderBestOpportunities(dataRows) {
+async function renderBestOpportunities(dataRows, options = {}) {
   const grid = document.getElementById("bestOpportunitiesGrid");
   const subtitle = document.getElementById("bestOpportunitiesSubtitle");
 
   if (!grid) return;
 
+  const latestSeq =
+    window.latestRolls?.[0]?.seq ||
+    window.latestRolls?.[0]?.created_at_utc ||
+    window.latestRolls?.[0]?.number ||
+    "";
+
+  const key = [
+    getCurrentWheelId(),
+    document.getElementById("statsWindowSelect")?.value || "500",
+    latestSeq,
+    JSON.stringify(getStrategyPrefs())
+  ].join("|");
+
+  if (!options.force && key === bestOpportunitiesLastKey) {
+    return;
+  }
+
+  if (bestOpportunitiesInProgress) {
+    return;
+  }
+
+  bestOpportunitiesLastKey = key;
+  bestOpportunitiesInProgress = true;
+
   if (subtitle) {
     subtitle.textContent = `Current board • Based on ${getStatsWindowLabel()} • Muted strategies excluded`;
   }
 
-  grid.innerHTML = "Calculating opportunities...";
-
-  const items = await buildBestOpportunities(dataRows);
-
-  if (!items.length) {
-    grid.innerHTML = "No qualifying opportunities found.";
-    return;
+  // Do NOT wipe the grid every tick. Keep old cards visible while recalculating.
+  if (!bestOpportunitiesLastHtml) {
+    grid.innerHTML = "Calculating opportunities...";
+  } else {
+    grid.classList.add("best-opportunities-refreshing");
   }
 
-  grid.innerHTML = items.map(renderOpportunityCard).join("");
+  try {
+    const items = await buildBestOpportunities(dataRows);
+
+    if (!items.length) {
+      bestOpportunitiesLastHtml = "No qualifying opportunities found.";
+      grid.innerHTML = bestOpportunitiesLastHtml;
+      return;
+    }
+
+    bestOpportunitiesLastHtml = items.map(renderOpportunityCard).join("");
+    grid.innerHTML = bestOpportunitiesLastHtml;
+  } finally {
+    grid.classList.remove("best-opportunities-refreshing");
+    bestOpportunitiesInProgress = false;
+  }
 }
 
 function updateJustHitTicket(latestNumber) {
@@ -3575,7 +3629,16 @@ document.getElementById("runBacktestBtn")?.addEventListener("click", () => {
   }
 });
 document.getElementById("refreshBestOpportunitiesBtn")?.addEventListener("click", () => {
-  renderBestOpportunities(allData);
+  renderBestOpportunities(allData, { force: true });
+});
+document.getElementById("toggleBestOpportunitiesBtn")?.addEventListener("click", () => {
+  const panel = document.getElementById("bestOpportunitiesPanel");
+  const btn = document.getElementById("toggleBestOpportunitiesBtn");
+
+  if (!panel || !btn) return;
+
+  panel.classList.toggle("collapsed");
+  btn.textContent = panel.classList.contains("collapsed") ? "Expand" : "Collapse";
 });
 // ===============================
 // Startup / initialization LAST
