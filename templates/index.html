@@ -203,6 +203,20 @@
       <!-- #streetStatsLabel will be added here dynamically -->
     </div>
 
+    <div id="bestOpportunitiesPanel" class="best-opportunities-panel">
+      <div class="best-opportunities-header">
+        <div>
+          <h2>Best Opportunities</h2>
+          <div id="bestOpportunitiesSubtitle"></div>
+        </div>
+        <button type="button" id="refreshBestOpportunitiesBtn">Refresh</button>
+      </div>
+    
+      <div id="bestOpportunitiesGrid" class="best-opportunities-grid">
+        Loading opportunities...
+      </div>
+    </div>
+
     <div class="dashboard">
       <div class="table-wrapper">
         <div class="table-container">
@@ -589,6 +603,56 @@ const urgencyHighlightState = {
   expireAt: 0,
   hold: false,
 };
+
+function getStatsWindowLabel() {
+  const val = document.getElementById("statsWindowSelect")?.value || "500";
+
+  if (val === "all") return "All DB";
+  return `Last ${val}`;
+}
+
+function getRiskForRow(row) {
+  const adjusted = parseMoneyValue(row["Adjusted Martingale Risk"]);
+  const raw = parseMoneyValue(row["Martingale Risk"]);
+  return Number.isFinite(adjusted) ? adjusted : raw;
+}
+
+function getRiskLabelForRow(row) {
+  return row["Adjusted Martingale Risk"] || row["Martingale Risk"] || "—";
+}
+
+function getCurrentDelayForRow(row) {
+  const adjusted = Number(row["Adjusted Rolls Since Last Hit"]);
+  const raw = Number(row["Rolls Since Last Hit"]);
+  return Number.isFinite(adjusted) ? adjusted : raw;
+}
+
+function getOpportunityBase(row) {
+  const name = normalizeStrategyName(row["Betting Strategy"]);
+  const scoreInfo = scoreStrategyRow(row);
+  const score = Number(scoreInfo.score);
+  const percentile = Number(row["Current Percentile"]);
+  const risk = getRiskForRow(row);
+  const delay = getCurrentDelayForRow(row);
+
+  if (!name) return null;
+  if (isStrategyMutedForAlerts(name)) return null;
+  if (!Number.isFinite(score)) return null;
+  if (!Number.isFinite(risk)) return null;
+
+  return {
+    name,
+    row,
+    score,
+    percentile: Number.isFinite(percentile) ? percentile : null,
+    risk,
+    riskLabel: getRiskLabelForRow(row),
+    delay,
+    p95: Number(row["P95 Delay"]),
+    p99: Number(row["P99 Delay"]),
+    maxDelay: Number(row["Max Delay"]),
+  };
+}
 
 const STRATEGY_PREFS_KEY = "strategyPrefs_v1";
 
@@ -1418,6 +1482,183 @@ function buildUrgencySnapshot(candidates) {
   });
 }
 
+async function getOpportunityBacktest(strategy) {
+  const wheelId = getCurrentWheelId();
+  const windowSize = document.getElementById("statsWindowSelect")?.value || "500";
+
+  const successRolls = document.getElementById("backtestSuccessRolls")?.value || "5";
+  const minEntries = document.getElementById("backtestMinEntries")?.value || "8";
+  const maxWaitLimit = document.getElementById("backtestMaxWaitLimit")?.value || "";
+
+  const url =
+    `https://eu.getdatbp.com/backtest-entry.json` +
+    `?wheel_id=${encodeURIComponent(wheelId)}` +
+    `&strategy=${encodeURIComponent(strategy)}` +
+    `&window=${encodeURIComponent(windowSize)}` +
+    `&success_rolls=${encodeURIComponent(successRolls)}` +
+    `&min_entries=${encodeURIComponent(minEntries)}` +
+    (maxWaitLimit ? `&max_wait_limit=${encodeURIComponent(maxWaitLimit)}` : "");
+
+  try {
+    const data = await fetch(url).then(r => r.json());
+    if (!data.ok) return null;
+    return data.recommended_entry || null;
+  } catch {
+    return null;
+  }
+}
+
+async function buildBestOpportunities(dataRows) {
+  const baseCandidates = (Array.isArray(dataRows) ? dataRows : [])
+    .map(getOpportunityBase)
+    .filter(Boolean);
+
+  if (!baseCandidates.length) return [];
+
+  const topForBacktest = [...baseCandidates]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 20);
+
+  for (const c of topForBacktest) {
+    c.backtest = await getOpportunityBacktest(c.name);
+  }
+
+  const withBacktest = topForBacktest.filter(c => c.backtest && c.backtest.label);
+
+  const bestStatistical = [...baseCandidates].sort((a, b) => {
+    const ap = a.percentile ?? -Infinity;
+    const bp = b.percentile ?? -Infinity;
+    return (b.score - a.score) || (bp - ap);
+  })[0];
+
+  const bestRecovery = [...withBacktest].sort((a, b) => {
+    return (
+      (b.backtest.success_rate - a.backtest.success_rate) ||
+      (a.backtest.max_wait - b.backtest.max_wait) ||
+      (b.backtest.entries - a.backtest.entries)
+    );
+  })[0];
+
+  const bestLowRisk = [...baseCandidates]
+    .filter(c => c.score >= 65)
+    .sort((a, b) => {
+      return (a.risk - b.risk) || (b.score - a.score);
+    })[0];
+
+  const bestAutomation = [...withBacktest].sort((a, b) => {
+    const aScore =
+      (a.score * 0.35) +
+      ((a.percentile ?? 0) * 0.2) +
+      (a.backtest.success_rate * 0.25) +
+      (Math.max(0, 100 - (a.backtest.max_wait * 5)) * 0.1) +
+      (Math.min(100, a.backtest.entries * 5) * 0.1);
+
+    const bScore =
+      (b.score * 0.35) +
+      ((b.percentile ?? 0) * 0.2) +
+      (b.backtest.success_rate * 0.25) +
+      (Math.max(0, 100 - (b.backtest.max_wait * 5)) * 0.1) +
+      (Math.min(100, b.backtest.entries * 5) * 0.1);
+
+    a.opportunityScore = Math.round(aScore);
+    b.opportunityScore = Math.round(bScore);
+
+    return bScore - aScore;
+  })[0];
+
+  const rareOpportunity = [...baseCandidates].sort((a, b) => {
+    return ((b.percentile ?? -Infinity) - (a.percentile ?? -Infinity)) || (b.score - a.score);
+  })[0];
+
+  return [
+    {
+      type: "Best Statistical Opportunity",
+      candidate: bestStatistical,
+      reason: "Highest current decision score with strong percentile pressure."
+    },
+    {
+      type: "Best Recovery Odds",
+      candidate: bestRecovery,
+      reason: "Best historical hit rate after recommended entry."
+    },
+    {
+      type: "Best Low-Risk Entry",
+      candidate: bestLowRisk,
+      reason: "Strong score with the lowest calculated martingale risk."
+    },
+    {
+      type: "Best Automation Candidate",
+      candidate: bestAutomation,
+      reason: "Best blend of current pressure, recovery odds, entries, and worst wait."
+    },
+    {
+      type: "Best Rare Opportunity",
+      candidate: rareOpportunity,
+      reason: "Most statistically rare current delay condition."
+    }
+  ].filter(x => x.candidate);
+}
+
+function renderOpportunityCard(item) {
+  const c = item.candidate;
+  const bt = c.backtest;
+
+  return `
+    <div class="best-opportunity-card">
+      <div class="best-opportunity-type">${item.type}</div>
+      <h3>${displayStrategyName(c.name)}</h3>
+
+      <div class="best-opportunity-reason">${item.reason}</div>
+
+      <div class="best-opportunity-meta">
+        <span>Based on: <b>${getStatsWindowLabel()}</b></span>
+        <span>Score: <b>${c.score}</b></span>
+        <span>Percentile: <b>${c.percentile ?? "—"}%</b></span>
+        <span>Delay: <b>${c.delay}</b></span>
+        <span>Risk: <b>${c.riskLabel}</b></span>
+      </div>
+
+      ${bt ? `
+        <div class="best-opportunity-backtest">
+          Entry: <b>${bt.label}</b> at <b>${bt.threshold}</b> |
+          Success: <b>${bt.success_rate}%</b> within <b>${bt.success_rolls}</b> |
+          Worst: <b>${bt.max_wait}</b>
+        </div>
+      ` : `
+        <div class="best-opportunity-backtest muted">
+          Backtest not available for this card.
+        </div>
+      `}
+
+      <button type="button" onclick="openStrategyProfileModal('${c.name.replace(/'/g, "\\'")}')">
+        Open Profile
+      </button>
+    </div>
+  `;
+}
+
+async function renderBestOpportunities(dataRows) {
+  const grid = document.getElementById("bestOpportunitiesGrid");
+  const subtitle = document.getElementById("bestOpportunitiesSubtitle");
+
+  if (!grid) return;
+
+  if (subtitle) {
+    subtitle.textContent = `Current board • Based on ${getStatsWindowLabel()} • Muted strategies excluded`;
+  }
+
+  grid.innerHTML = "Calculating opportunities...";
+
+  const items = await buildBestOpportunities(dataRows);
+
+  if (!items.length) {
+    grid.innerHTML = "No qualifying opportunities found.";
+    return;
+  }
+
+  grid.innerHTML = items.map(renderOpportunityCard).join("");
+}
+
 function updateJustHitTicket(latestNumber) {
   const container = document.getElementById("justHitTicket");
   const hit = parseInt(latestNumber);
@@ -1844,6 +2085,7 @@ function sameNumberSet(a, b) {
 renderTables(true);
 renderUrgencyOverlay(allData);
 saveUrgencySnapshot(allData);
+renderBestOpportunities(allData);
 refreshOpenStrategyModal();
 setTimeout(() => {
   if (typeof rolls !== "undefined" && rolls.length > 0) {
@@ -3331,6 +3573,9 @@ document.getElementById("runBacktestBtn")?.addEventListener("click", () => {
   if (activeProfileStrategy) {
     renderEntryBacktest(activeProfileStrategy);
   }
+});
+document.getElementById("refreshBestOpportunitiesBtn")?.addEventListener("click", () => {
+  renderBestOpportunities(allData);
 });
 // ===============================
 // Startup / initialization LAST
