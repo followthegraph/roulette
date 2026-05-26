@@ -876,6 +876,36 @@ def profit_sim():
     total_loss = round(sum(t["profit"] for t in trades if t["profit"] < 0), 2)
     net_profit = round(bankroll, 2)
 
+    total_staked = 0
+    largest_win = None
+    largest_loss = None
+    longest_loss_streak = 0
+    current_loss_streak = 0
+
+    for t in trades:
+        profit = t["profit"]
+
+        if largest_win is None or profit > largest_win:
+            largest_win = profit
+
+        if largest_loss is None or profit < largest_loss:
+            largest_loss = profit
+
+        if t["outcome"] == "loss":
+            current_loss_streak += 1
+            longest_loss_streak = max(longest_loss_streak, current_loss_streak)
+        else:
+            current_loss_streak = 0
+
+        if t["outcome"] == "win":
+            step = int(t["step"])
+            total_staked += base_units * ((2 ** (step + 1)) - 1) * unit
+        else:
+            total_staked += base_units * ((2 ** max_steps) - 1) * unit
+
+    roi = round((net_profit / total_staked) * 100, 2) if total_staked else None
+    profit_factor = round(total_profit / abs(total_loss), 2) if total_loss < 0 else None
+
     return jsonify({
         "ok": True,
         "wheel_id": wheel_id,
@@ -898,7 +928,13 @@ def profit_sim():
         "net_profit": net_profit,
         "average_profit_per_entry": round(net_profit / len(trades), 2) if trades else None,
         "max_drawdown": round(max_drawdown, 2),
-        "trades": trades[-50:]
+        "trades": trades[-50:],
+        "total_staked": round(total_staked, 2),
+        "roi": roi,
+        "profit_factor": profit_factor,
+        "largest_win": largest_win,
+        "largest_loss": largest_loss,
+        "longest_loss_streak": longest_loss_streak,
     })
 
 @app.route("/global-latest")
