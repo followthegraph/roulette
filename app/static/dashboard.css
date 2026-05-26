@@ -839,3 +839,63 @@
     font-weight: bold;
     text-transform: uppercase;
   }
+  .profit-sim-note {
+    margin: 10px 0;
+    padding: 10px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #7c2d12;
+  }
+  
+  .profit-summary {
+    margin: 10px 0;
+    font-size: 13px;
+  }
+  
+  .profit-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  
+  .profit-card {
+    border: 1px solid #d1d5db;
+    border-radius: 14px;
+    padding: 12px;
+    background: #f9fafb;
+  }
+  
+  .profit-rank {
+    font-size: 11px;
+    font-weight: bold;
+    color: #2563eb;
+  }
+  
+  .profit-card h3 {
+    margin: 4px 0 8px;
+  }
+  
+  .profit-card p {
+    font-size: 13px;
+  }
+  
+  .profit-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px 10px;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  
+  .profit-card button {
+    margin-top: 10px;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: #2563eb;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+  }

@@ -53,6 +53,48 @@
         <div id="strategyConfigBody"></div>
       </div>
     </div>
+    <div>
+      <button type="button" id="profitSimBtn">Profitability Simulator</button>
+    </div>
+    <div id="profitSimModal" class="strategy-profile-modal hidden">
+      <div class="strategy-profile-modal-card">
+        <div class="strategy-profile-modal-header">
+          <div>
+            <h2>Profitability Simulator</h2>
+            <div>Compare strategies by historical simulated profit.</div>
+          </div>
+          <button id="profitSimClose">Close</button>
+        </div>
+    
+        <div class="strategy-profile-controls">
+          <label>Window</label>
+          <select id="profitWindow">
+            <option value="500">Last 500</option>
+            <option value="1000">Last 1000</option>
+            <option value="2500" selected>Last 2500</option>
+            <option value="all">All DB</option>
+          </select>
+    
+          <label>Unit</label>
+          <input id="profitUnit" type="number" value="1" min="1">
+    
+          <label>Max Steps</label>
+          <input id="profitMaxSteps" type="number" value="8" min="1" max="20">
+    
+          <label>Min Entries</label>
+          <input id="profitMinEntries" type="number" value="5" min="1">
+    
+          <button type="button" id="runProfitRankBtn">Run</button>
+        </div>
+    
+        <div class="profit-sim-note">
+          This sim answers: “If this strategy was entered at its best tested percentile threshold, what would the net result have been?”
+          French bets currently use simplified payout logic.
+        </div>
+    
+        <div id="profitRankBody">Choose parameters and run simulation.</div>
+      </div>
+    </div>
     <div style="margin-bottom: 10px;">
       <!-- <label>Data Source:</label> -->
       <select id="dataSourceToggle" style="display:none;">
@@ -1498,6 +1540,86 @@ function buildUrgencySnapshot(candidates) {
     if (index === 4 && value === '? Consider betting') td.classList.add('highlight');
     row.appendChild(td);
   });
+}
+
+async function fetchProfitRank() {
+  const wheelId = getCurrentWheelId();
+  const windowSize = document.getElementById("profitWindow")?.value || "2500";
+  const unit = document.getElementById("profitUnit")?.value || "1";
+  const maxSteps = document.getElementById("profitMaxSteps")?.value || "8";
+  const minEntries = document.getElementById("profitMinEntries")?.value || "5";
+
+  const url =
+    `/profit-rank.json` +
+    `?wheel_id=${encodeURIComponent(wheelId)}` +
+    `&window=${encodeURIComponent(windowSize)}` +
+    `&unit=${encodeURIComponent(unit)}` +
+    `&max_steps=${encodeURIComponent(maxSteps)}` +
+    `&min_entries=${encodeURIComponent(minEntries)}`;
+
+  return fetch(url).then(r => r.json());
+}
+
+function renderProfitRank(data) {
+  const body = document.getElementById("profitRankBody");
+  if (!body) return;
+
+  if (!data.ok) {
+    body.innerHTML = `<p>Profit simulation failed.</p>`;
+    return;
+  }
+
+  const rows = data.top_10 || [];
+
+  body.innerHTML = `
+    <div class="profit-summary">
+      <b>Wheel:</b> ${data.wheel_id} |
+      <b>Window:</b> ${data.window} |
+      <b>Unit:</b> ${data.unit} |
+      <b>Max Steps:</b> ${data.max_steps}
+    </div>
+
+    <div class="profit-cards">
+      ${rows.map((r, i) => `
+        <div class="profit-card">
+          <div class="profit-rank">#${i + 1}</div>
+          <h3>${r.strategy}</h3>
+
+          <p>
+            Best tested entry was <b>${r.entry}</b> at threshold <b>${r.threshold}</b>.
+            It produced <b>${r.net_profit}</b> net profit across <b>${r.total_entries}</b> entries.
+          </p>
+
+          <div class="profit-grid">
+            <span>Net: <b>${r.net_profit}</b></span>
+            <span>ROI: <b>${r.roi}%</b></span>
+            <span>Win Rate: <b>${r.win_rate}%</b></span>
+            <span>Entries: <b>${r.total_entries}</b></span>
+            <span>Drawdown: <b>${r.max_drawdown}</b></span>
+            <span>Loss Streak: <b>${r.longest_loss_streak}</b></span>
+            <span>Profit Factor: <b>${r.profit_factor ?? "—"}</b></span>
+            <span>Total Staked: <b>${r.total_staked}</b></span>
+          </div>
+
+          <button type="button" onclick="openStrategyProfileModal('${r.strategy.replace(/'/g, "\\'")}')">
+            Open Strategy Profile
+          </button>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+async function runProfitRank() {
+  const body = document.getElementById("profitRankBody");
+  if (body) body.innerHTML = "Running profitability simulation...";
+
+  try {
+    const data = await fetchProfitRank();
+    renderProfitRank(data);
+  } catch (err) {
+    if (body) body.innerHTML = `<p>Error: ${err.message}</p>`;
+  }
 }
 
 async function getOpportunityBacktest(strategy) {
@@ -3714,6 +3836,16 @@ document.getElementById("toggleBestOpportunitiesBtn")?.addEventListener("click",
   panel.classList.toggle("collapsed");
   btn.textContent = panel.classList.contains("collapsed") ? "Expand" : "Collapse";
 });
+document.getElementById("profitSimBtn")?.addEventListener("click", () => {
+  document.getElementById("profitSimModal")?.classList.remove("hidden");
+  runProfitRank();
+});
+
+document.getElementById("profitSimClose")?.addEventListener("click", () => {
+  document.getElementById("profitSimModal")?.classList.add("hidden");
+});
+
+document.getElementById("runProfitRankBtn")?.addEventListener("click", runProfitRank);
 // ===============================
 // Startup / initialization LAST
 // ===============================
