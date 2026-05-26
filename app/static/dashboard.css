@@ -659,3 +659,58 @@
     color: #6b7280;
     margin-bottom: 8px;
   }
+
+  .strategy-config-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    z-index: 9500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .strategy-config-modal.hidden {
+    display: none;
+  }
+  
+  .strategy-config-card {
+    width: min(900px, 92vw);
+    max-height: 86vh;
+    overflow: auto;
+    background: white;
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  }
+  
+  .strategy-config-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .strategy-config-note {
+    color: #4b5563;
+    font-size: 13px;
+  }
+  
+  .strategy-config-group {
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    padding: 12px;
+    margin: 10px 0;
+  }
+  
+  .strategy-config-group-title {
+    font-weight: bold;
+    display: block;
+    margin-bottom: 8px;
+  }
+  
+  .strategy-config-items {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 6px 12px;
+    font-size: 13px;
+  }

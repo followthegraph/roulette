@@ -39,6 +39,20 @@
         <div id="urgencyOverlayList">No urgent opportunities yet.</div>
       </div>
     </div>
+    <div id="strategyConfigModal" class="strategy-config-modal hidden">
+      <div class="strategy-config-card">
+        <div class="strategy-config-header">
+          <h2>Strategy Alert Config</h2>
+          <button type="button" id="strategyConfigClose">Close</button>
+        </div>
+    
+        <p class="strategy-config-note">
+          Muted groups/strategies stay visible in tables, but are excluded from urgency alerts and cross-board counts.
+        </p>
+    
+        <div id="strategyConfigBody"></div>
+      </div>
+    </div>
     <div style="margin-bottom: 10px;">
       <!-- <label>Data Source:</label> -->
       <select id="dataSourceToggle" style="display:none;">
@@ -61,7 +75,11 @@
         </select>
       </div>
     </div>
-
+    <div>
+      <button type="button" id="strategyConfigBtn">
+        Strategy Alert Config
+      </button>
+    </div>
     <div>
       <label for="statsWindowSelect"><b>Stats Window:</b></label><br>
       <select id="statsWindowSelect" style="width:160px;">
@@ -571,6 +589,142 @@ const urgencyHighlightState = {
   expireAt: 0,
   hold: false,
 };
+
+const STRATEGY_PREFS_KEY = "strategyPrefs_v1";
+
+const strategyGroups = {
+  "French Bets": ["Zero", "Tiers", "Orphelins", "Voisins Du Zero"],
+  "Rows": ["Top Row", "Middle Row", "Bottom Row"],
+  "Dozens": ["1st & 12", "2nd & 12", "3rd & 12"],
+  "Outside Bets": ["Odds", "Even", "Red", "Black", "1 to 18", "19 to 36"],
+  "Street Bets": [
+    "First Street", "Second Street", "Third Street", "Fourth Street",
+    "Fifth Street", "Sixth Street", "Seventh Street", "Eighth Street",
+    "Ninth Street", "Tenth Street", "Eleventh Street", "Twelfth Street"
+  ],
+  "Line Bets": [
+    "First Line", "Second Line", "Third Line",
+    "Fourth Line", "Fifth Line", "Sixth Line"
+  ],
+  "Combined Dozens": [
+    "1st & 2nd & 12", "1st & 3rd & 12", "2nd & 3rd & 12"
+  ],
+  "Combined Rows": [
+    "Top & Middle Row", "Top & Bottom Row", "Middle & Bottom Row"
+  ],
+  "Crossfire": [
+    "Crossfire, 1st & top", "Crossfire, 1st & middle", "Crossfire, 1st & bottom",
+    "Crossfire, 2nd & top", "Crossfire, 2nd & middle", "Crossfire, 2nd & bottom",
+    "Crossfire, 3rd & top", "Crossfire, 3rd & middle", "Crossfire, 3rd & bottom"
+  ],
+  "Adjacent Streets": [
+    "Adj Street, 1st & 2nd", "Adj Street, 2nd & 3rd", "Adj Street, 3rd & 4th",
+    "Adj Street, 4th & 5th", "Adj Street, 5th & 6th", "Adj Street, 6th & 7th",
+    "Adj Street, 7th & 8th", "Adj Street, 8th & 9th", "Adj Street, 9th & 10th",
+    "Adj Street, 10th & 11th", "Adj Street, 11th & 12th"
+  ]
+};
+
+function getStrategyPrefs() {
+  try {
+    return JSON.parse(localStorage.getItem(STRATEGY_PREFS_KEY)) || {
+      mutedGroups: [],
+      mutedAlertStrategies: []
+    };
+  } catch {
+    return { mutedGroups: [], mutedAlertStrategies: [] };
+  }
+}
+
+function saveStrategyPrefs(prefs) {
+  localStorage.setItem(STRATEGY_PREFS_KEY, JSON.stringify(prefs));
+}
+
+function isStrategyMutedForAlerts(strategyName) {
+  const prefs = getStrategyPrefs();
+  const name = normalizeStrategyName(strategyName);
+
+  if (prefs.mutedAlertStrategies.includes(name)) return true;
+
+  for (const group of prefs.mutedGroups) {
+    const strategies = strategyGroups[group] || [];
+    if (strategies.map(normalizeStrategyName).includes(name)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function renderStrategyConfig() {
+  const body = document.getElementById("strategyConfigBody");
+  if (!body) return;
+
+  const prefs = getStrategyPrefs();
+
+  body.innerHTML = Object.entries(strategyGroups).map(([group, strategies]) => {
+    const groupMuted = prefs.mutedGroups.includes(group);
+
+    return `
+      <div class="strategy-config-group">
+        <label class="strategy-config-group-title">
+          <input type="checkbox"
+            class="strategy-group-mute"
+            data-group="${group}"
+            ${groupMuted ? "checked" : ""}
+          >
+          Mute ${group}
+        </label>
+
+        <div class="strategy-config-items">
+          ${strategies.map(s => {
+            const name = normalizeStrategyName(s);
+            const checked = prefs.mutedAlertStrategies.includes(name);
+            return `
+              <label>
+                <input type="checkbox"
+                  class="strategy-mute"
+                  data-strategy="${name}"
+                  ${checked ? "checked" : ""}
+                >
+                ${displayStrategyName(s)}
+              </label>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  body.querySelectorAll(".strategy-group-mute").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const prefs = getStrategyPrefs();
+      const group = cb.dataset.group;
+
+      prefs.mutedGroups = prefs.mutedGroups.filter(g => g !== group);
+      if (cb.checked) prefs.mutedGroups.push(group);
+
+      saveStrategyPrefs(prefs);
+      renderUrgencyOverlay(allData);
+      saveUrgencySnapshot(allData);
+    });
+  });
+
+  body.querySelectorAll(".strategy-mute").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const prefs = getStrategyPrefs();
+      const strategy = cb.dataset.strategy;
+
+      prefs.mutedAlertStrategies = prefs.mutedAlertStrategies.filter(s => s !== strategy);
+      if (cb.checked) prefs.mutedAlertStrategies.push(strategy);
+
+      saveStrategyPrefs(prefs);
+      renderUrgencyOverlay(allData);
+      saveUrgencySnapshot(allData);
+    });
+  });
+}
+
 
 function normalizeStrategyName(name) {
   return String(name || '')
@@ -2305,6 +2459,7 @@ function buildUrgencyCandidates(dataRows) {
     const rawName = row['Betting Strategy'];
     const name = normalizeStrategyName(rawName);
     if (!name) return;
+    if (isStrategyMutedForAlerts(name)) return;
     if (String(row['BetType'] || '').includes('Double') || String(row['BetType'] || '').includes('Quad')) return;
     const coverage = getCoverageSizeForStrategy(name);
     if (!coverage) return;
@@ -3182,6 +3337,15 @@ document.getElementById("runBacktestBtn")?.addEventListener("click", () => {
 // ===============================
 window.addEventListener("scroll", updateStickyScrollState);
 updateStickyScrollState();
+
+document.getElementById("strategyConfigBtn")?.addEventListener("click", () => {
+  renderStrategyConfig();
+  document.getElementById("strategyConfigModal")?.classList.remove("hidden");
+});
+
+document.getElementById("strategyConfigClose")?.addEventListener("click", () => {
+  document.getElementById("strategyConfigModal")?.classList.add("hidden");
+});
 
 setInterval(updateLastWriteAges, 1000);
 
