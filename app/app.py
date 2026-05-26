@@ -755,11 +755,45 @@ def global_summary():
 
     return jsonify(rows)
 
-def estimate_min_net_profit(strategy):
+# def estimate_min_net_profit(strategy):
+#     s = str(strategy or "").lstrip("'").strip()
+
+#     if s in ("Voisins Du Zero", "Tiers", "Orphelins", "Zero"):
+#         return 1
+
+#     if s.startswith("Adj Street"):
+#         return 10
+
+#     if "Street" in s:
+#         return 11
+
+#     if "Line" in s:
+#         return 5
+
+#     if s in (
+#         "1st & 12", "2nd & 12", "3rd & 12",
+#         "Top Row", "Middle Row", "Bottom Row"
+#     ):
+#         return 2
+
+#     if s in (
+#         "1st & 2nd & 12", "1st & 3rd & 12", "2nd & 3rd & 12",
+#         "Top & Middle Row", "Top & Bottom Row", "Middle & Bottom Row"
+#     ):
+#         return 1
+
+#     if s.startswith("Crossfire,"):
+#         return 1
+
+#     if s in ("Odds", "Even", "Red", "Black", "1 to 18", "19 to 36"):
+#         return 1
+
+#     return 1
+def get_net_profit_for_strategy_bundle(strategy):
     s = str(strategy or "").lstrip("'").strip()
 
-    if s in ("Voisins Du Zero", "Tiers", "Orphelins", "Zero"):
-        return 1
+    if s.startswith("Adj Street"):
+        return 10
 
     if "Street" in s:
         return 11
@@ -767,10 +801,7 @@ def estimate_min_net_profit(strategy):
     if "Line" in s:
         return 5
 
-    if s in (
-        "1st & 12", "2nd & 12", "3rd & 12",
-        "Top Row", "Middle Row", "Bottom Row"
-    ):
+    if s in ("1st & 12", "2nd & 12", "3rd & 12", "Top Row", "Middle Row", "Bottom Row"):
         return 2
 
     if s in (
@@ -785,7 +816,11 @@ def estimate_min_net_profit(strategy):
     if s in ("Odds", "Even", "Red", "Black", "1 to 18", "19 to 36"):
         return 1
 
+    if s in ("Voisins Du Zero", "Tiers", "Orphelins", "Zero"):
+        return 1
+
     return 1
+
 def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1, max_steps=8):
     numbers = get_strategy_numbers(strategy)
 
@@ -832,7 +867,7 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
     threshold = math.ceil(threshold)
 
     base_units = get_base_units_for_strategy(strategy)
-    net_profit_per_unit = estimate_min_net_profit(strategy) or 1
+    net_profit_per_unit = get_net_profit_for_strategy_bundle(strategy) or 1
 
     trades = []
     bankroll = 0
