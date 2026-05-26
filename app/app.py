@@ -726,6 +726,38 @@ def global_summary():
 
     return jsonify(rows)
 
+def estimate_min_net_profit(strategy):
+    s = str(strategy or "").lstrip("'").strip()
+
+    if s in ("Voisins Du Zero", "Tiers", "Orphelins", "Zero"):
+        return 1
+
+    if "Street" in s:
+        return 11
+
+    if "Line" in s:
+        return 5
+
+    if s in (
+        "1st & 12", "2nd & 12", "3rd & 12",
+        "Top Row", "Middle Row", "Bottom Row"
+    ):
+        return 2
+
+    if s in (
+        "1st & 2nd & 12", "1st & 3rd & 12", "2nd & 3rd & 12",
+        "Top & Middle Row", "Top & Bottom Row", "Middle & Bottom Row"
+    ):
+        return 1
+
+    if s.startswith("Crossfire,"):
+        return 1
+
+    if s in ("Odds", "Even", "Red", "Black", "1 to 18", "19 to 36"):
+        return 1
+
+    return 1
+
 @app.route("/profit-sim.json")
 def profit_sim():
     wheel_id = request.args.get("wheel_id") or WHEEL_ID
