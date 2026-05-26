@@ -364,6 +364,35 @@ def get_strategy_numbers(strategy):
 
     return bets.get(strategy)
 
+def get_supported_profit_strategies():
+    return [
+        "Zero", "Tiers", "Orphelins", "Voisins Du Zero",
+
+        "Odds", "Even", "Red", "Black", "1 to 18", "19 to 36",
+
+        "Top Row", "Middle Row", "Bottom Row",
+        "1st & 12", "2nd & 12", "3rd & 12",
+
+        "First Line", "Second Line", "Third Line",
+        "Fourth Line", "Fifth Line", "Sixth Line",
+
+        "First Street", "Second Street", "Third Street", "Fourth Street",
+        "Fifth Street", "Sixth Street", "Seventh Street", "Eighth Street",
+        "Ninth Street", "Tenth Street", "Eleventh Street", "Twelfth Street",
+
+        "1st & 2nd & 12", "1st & 3rd & 12", "2nd & 3rd & 12",
+        "Top & Middle Row", "Top & Bottom Row", "Middle & Bottom Row",
+
+        "Crossfire, 1st & top", "Crossfire, 1st & middle", "Crossfire, 1st & bottom",
+        "Crossfire, 2nd & top", "Crossfire, 2nd & middle", "Crossfire, 2nd & bottom",
+        "Crossfire, 3rd & top", "Crossfire, 3rd & middle", "Crossfire, 3rd & bottom",
+
+        "Adj Street, 1st & 2nd", "Adj Street, 2nd & 3rd", "Adj Street, 3rd & 4th",
+        "Adj Street, 4th & 5th", "Adj Street, 5th & 6th", "Adj Street, 6th & 7th",
+        "Adj Street, 7th & 8th", "Adj Street, 8th & 9th", "Adj Street, 9th & 10th",
+        "Adj Street, 10th & 11th", "Adj Street, 11th & 12th",
+    ]
+
 # --- Utility JSON helpers ---
 def json_read(path: Path):
     with path.open("r", encoding="utf-8") as f:
@@ -757,25 +786,11 @@ def estimate_min_net_profit(strategy):
         return 1
 
     return 1
-
-@app.route("/profit-sim.json")
-def profit_sim():
-    wheel_id = request.args.get("wheel_id") or WHEEL_ID
-    strategy = request.args.get("strategy", "").lstrip("'").strip()
-    window = request.args.get("window", "2500")
-    entry = request.args.get("entry", "P95").upper()
-
-    unit = float(request.args.get("unit", 1))
-    max_steps = int(request.args.get("max_steps", 8))
-
+def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1, max_steps=8):
     numbers = get_strategy_numbers(strategy)
 
     if not numbers:
-        return jsonify({
-            "ok": False,
-            "error": "Unknown strategy",
-            "strategy": strategy
-        }), 404
+        return None
 
     rows = get_global_rolls_for_stats(wheel_id, window)
     rolls = list(reversed(rows))
@@ -809,24 +824,15 @@ def profit_sim():
         "P99": percentile(delays, 99),
     }
 
-    threshold = percentile_map.get(entry)
+    threshold = percentile_map.get(str(entry).upper())
 
     if threshold is None:
-        return jsonify({
-            "ok": False,
-            "error": "Unable to calculate entry threshold",
-            "strategy": strategy,
-            "entry": entry
-        }), 400
+        return None
 
-    threshold = int(__import__("math").ceil(threshold))
+    threshold = math.ceil(threshold)
 
     base_units = get_base_units_for_strategy(strategy)
-
-    # conservative net profit estimate per winning base unit
-    net_profit_per_unit = estimate_min_net_profit(strategy)
-    if net_profit_per_unit is None:
-        net_profit_per_unit = 1
+    net_profit_per_unit = estimate_min_net_profit(strategy) or 1
 
     trades = []
     bankroll = 0
@@ -848,7 +854,6 @@ def profit_sim():
                 stake_units * net_profit_per_unit * unit
                 - total_prior_loss_units * unit
             )
-
             outcome = "win"
         else:
             step = max_steps
@@ -872,8 +877,8 @@ def profit_sim():
 
     wins = sum(1 for t in trades if t["outcome"] == "win")
     losses = sum(1 for t in trades if t["outcome"] == "loss")
-    total_profit = round(sum(t["profit"] for t in trades if t["profit"] > 0), 2)
-    total_loss = round(sum(t["profit"] for t in trades if t["profit"] < 0), 2)
+    gross_profit = round(sum(t["profit"] for t in trades if t["profit"] > 0), 2)
+    gross_loss = round(sum(t["profit"] for t in trades if t["profit"] < 0), 2)
     net_profit = round(bankroll, 2)
 
     total_staked = 0
@@ -885,11 +890,8 @@ def profit_sim():
     for t in trades:
         profit = t["profit"]
 
-        if largest_win is None or profit > largest_win:
-            largest_win = profit
-
-        if largest_loss is None or profit < largest_loss:
-            largest_loss = profit
+        largest_win = profit if largest_win is None else max(largest_win, profit)
+        largest_loss = profit if largest_loss is None else min(largest_loss, profit)
 
         if t["outcome"] == "loss":
             current_loss_streak += 1
@@ -904,9 +906,9 @@ def profit_sim():
             total_staked += base_units * ((2 ** max_steps) - 1) * unit
 
     roi = round((net_profit / total_staked) * 100, 2) if total_staked else None
-    profit_factor = round(total_profit / abs(total_loss), 2) if total_loss < 0 else None
+    profit_factor = round(gross_profit / abs(gross_loss), 2) if gross_loss < 0 else None
 
-    return jsonify({
+    return {
         "ok": True,
         "wheel_id": wheel_id,
         "strategy": strategy,
@@ -923,18 +925,122 @@ def profit_sim():
         "wins": wins,
         "losses": losses,
         "win_rate": round((wins / len(trades) * 100), 2) if trades else None,
-        "gross_profit": total_profit,
-        "gross_loss": total_loss,
+        "gross_profit": gross_profit,
+        "gross_loss": gross_loss,
         "net_profit": net_profit,
         "average_profit_per_entry": round(net_profit / len(trades), 2) if trades else None,
         "max_drawdown": round(max_drawdown, 2),
-        "trades": trades[-50:],
         "total_staked": round(total_staked, 2),
         "roi": roi,
         "profit_factor": profit_factor,
         "largest_win": largest_win,
         "largest_loss": largest_loss,
         "longest_loss_streak": longest_loss_streak,
+        "trades": trades[-50:],
+    }
+
+@app.route("/profit-sim.json")
+def profit_sim():
+    wheel_id = request.args.get("wheel_id") or WHEEL_ID
+    strategy = request.args.get("strategy", "").lstrip("'").strip()
+    window = request.args.get("window", "2500")
+    entry = request.args.get("entry", "P95").upper()
+    unit = float(request.args.get("unit", 1))
+    max_steps = int(request.args.get("max_steps", 8))
+
+    result = run_profit_simulation(
+        wheel_id=wheel_id,
+        strategy=strategy,
+        window=window,
+        entry=entry,
+        unit=unit,
+        max_steps=max_steps,
+    )
+
+    if not result:
+        return jsonify({
+            "ok": False,
+            "error": "Unable to run profit simulation",
+            "strategy": strategy,
+            "entry": entry
+        }), 400
+
+    return jsonify(result)
+
+@app.route("/profit-rank.json")
+def profit_rank():
+    wheel_id = request.args.get("wheel_id") or WHEEL_ID
+    window = request.args.get("window", "2500")
+    unit = float(request.args.get("unit", 1))
+    max_steps = int(request.args.get("max_steps", 8))
+    min_entries = int(request.args.get("min_entries", 5))
+
+    entries = ["P90", "P95", "P97", "P99"]
+    results = []
+
+    for strategy in get_supported_profit_strategies():
+        best = None
+
+        for entry in entries:
+            result = run_profit_simulation(
+                wheel_id=wheel_id,
+                strategy=strategy,
+                window=window,
+                entry=entry,
+                unit=unit,
+                max_steps=max_steps,
+            )
+
+            if not result:
+                continue
+
+            if result["total_entries"] < min_entries:
+                continue
+
+            if best is None:
+                best = result
+                continue
+
+            current_key = (
+                result["net_profit"],
+                result["roi"] if result["roi"] is not None else -999999,
+                -abs(result["max_drawdown"]),
+                result["win_rate"] if result["win_rate"] is not None else 0,
+            )
+
+            best_key = (
+                best["net_profit"],
+                best["roi"] if best["roi"] is not None else -999999,
+                -abs(best["max_drawdown"]),
+                best["win_rate"] if best["win_rate"] is not None else 0,
+            )
+
+            if current_key > best_key:
+                best = result
+
+        if best:
+            best.pop("trades", None)
+            results.append(best)
+
+    results.sort(
+        key=lambda r: (
+            r["net_profit"],
+            r["roi"] if r["roi"] is not None else -999999,
+            -abs(r["max_drawdown"]),
+            r["win_rate"] if r["win_rate"] is not None else 0,
+        ),
+        reverse=True
+    )
+
+    return jsonify({
+        "ok": True,
+        "wheel_id": wheel_id,
+        "window": window,
+        "unit": unit,
+        "max_steps": max_steps,
+        "min_entries": min_entries,
+        "ranked": results,
+        "top_10": results[:10],
     })
 
 @app.route("/global-latest")
