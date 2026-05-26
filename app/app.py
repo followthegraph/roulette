@@ -351,8 +351,10 @@ def json_read(path: Path):
         return json.load(f)
 
 def json_write(path: Path, data):
-    with path.open("w", encoding="utf-8") as f:
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with tmp_path.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+    tmp_path.replace(path)
 
 def get_global_rolls_for_stats(wheel_id, window="500"):
     params = [wheel_id]
@@ -650,11 +652,20 @@ def receive_data():
         try:
             new_data = request.json["data"]
 
+            sync_to_global_collector(new_data)
+
             json_write(ROULETTE_JSON, new_data)
 
             try:
                 existing = json_read(ROULETTE_ALL_JSON)
             except FileNotFoundError:
+                existing = new_data.copy()
+                json_write(ROULETTE_ALL_JSON, existing)
+            except json.JSONDecodeError:
+                bad_path = ROULETTE_ALL_JSON.with_suffix(
+                    f".bad_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+                )
+                ROULETTE_ALL_JSON.replace(bad_path)
                 existing = new_data.copy()
                 json_write(ROULETTE_ALL_JSON, existing)
 
@@ -670,7 +681,7 @@ def receive_data():
                 str(STATS_CSV),
             )
 
-            sync_to_global_collector(new_data)
+            
 
             return jsonify({"status": "success", "message": "Data processed."})
 
