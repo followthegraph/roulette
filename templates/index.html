@@ -84,6 +84,9 @@
           <label>Min Entries</label>
           <input id="profitMinEntries" type="number" value="5" min="1">
     
+          <label>Table Limit</label>
+          <input id="profitTableLimit" type="number" value="2000" min="1">
+
           <button type="button" id="runProfitRankBtn">Run</button>
         </div>
     
@@ -1548,6 +1551,7 @@ async function fetchProfitRank() {
   const unit = document.getElementById("profitUnit")?.value || "1";
   const maxSteps = document.getElementById("profitMaxSteps")?.value || "8";
   const minEntries = document.getElementById("profitMinEntries")?.value || "5";
+  const tableLimit = document.getElementById("profitTableLimit")?.value || "2000";
 
   const url =
     `/profit-rank.json` +
@@ -1555,7 +1559,8 @@ async function fetchProfitRank() {
     `&window=${encodeURIComponent(windowSize)}` +
     `&unit=${encodeURIComponent(unit)}` +
     `&max_steps=${encodeURIComponent(maxSteps)}` +
-    `&min_entries=${encodeURIComponent(minEntries)}`;
+    `&min_entries=${encodeURIComponent(minEntries)}` +
+    `&table_limit=${encodeURIComponent(tableLimit)}`;
 
   return fetch(url).then(r => r.json());
 }

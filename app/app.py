@@ -933,6 +933,9 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         delay = hit_events[event_index]["index"] - hit_events[event_index - 1]["index"]
         hit_number = hit_events[event_index]["number"]
 
+        if delay < threshold:
+            continue
+
         wait_after_entry = delay - threshold
 
         if wait_after_entry < max_steps:
@@ -986,7 +989,7 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         })
 
     wins = sum(1 for t in trades if t["outcome"] == "win")
-    losses = sum(1 for t in trades if t["outcome"] == "loss")
+    losses = sum(1 for t in trades if t["outcome"] in ("loss", "table_limit_loss"))
     gross_profit = round(sum(t["profit"] for t in trades if t["profit"] > 0), 2)
     gross_loss = round(sum(t["profit"] for t in trades if t["profit"] < 0), 2)
     net_profit = round(bankroll, 2)
@@ -1003,7 +1006,7 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         largest_win = profit if largest_win is None else max(largest_win, profit)
         largest_loss = profit if largest_loss is None else min(largest_loss, profit)
 
-        if t["outcome"] == "loss":
+        if t["outcome"] in ("loss", "table_limit_loss"):
             current_loss_streak += 1
             longest_loss_streak = max(longest_loss_streak, current_loss_streak)
         else:
@@ -1044,6 +1047,7 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         "longest_loss_streak": longest_loss_streak,
         "trades": trades[-50:],
         "payout_model": "per_number" if strategy in ("Zero", "Tiers", "Orphelins", "Voisins Du Zero") else "bundle",
+        "table_limit": table_limit,
     }
 
 @app.route("/profit-sim.json")
@@ -1054,6 +1058,7 @@ def profit_sim():
     entry = request.args.get("entry", "P95").upper()
     unit = float(request.args.get("unit", 1))
     max_steps = int(request.args.get("max_steps", 8))
+    table_limit = float(request.args.get("table_limit", 2000))
 
     result = run_profit_simulation(
         wheel_id=wheel_id,
@@ -1062,6 +1067,7 @@ def profit_sim():
         entry=entry,
         unit=unit,
         max_steps=max_steps,
+        table_limit=table_limit,
     )
 
     if not result:
@@ -1081,6 +1087,7 @@ def profit_rank():
     unit = float(request.args.get("unit", 1))
     max_steps = int(request.args.get("max_steps", 8))
     min_entries = int(request.args.get("min_entries", 5))
+    table_limit = float(request.args.get("table_limit", 2000))
 
     entries = ["P90", "P95", "P97", "P99"]
     results = []
@@ -1096,6 +1103,7 @@ def profit_rank():
                 entry=entry,
                 unit=unit,
                 max_steps=max_steps,
+                table_limit=table_limit,
             )
 
             if not result:
@@ -1148,6 +1156,7 @@ def profit_rank():
         "min_entries": min_entries,
         "ranked": results,
         "top_10": results[:10],
+        "table_limit": table_limit,
     })
 
 @app.route("/global-latest")
