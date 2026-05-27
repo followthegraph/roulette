@@ -939,6 +939,7 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
             step = wait_after_entry
             stake_units = base_units * (2 ** step)
             total_prior_loss_units = base_units * ((2 ** step) - 1)
+            trade_staked = base_units * ((2 ** (step + 1)) - 1) * unit
 
             number_net = get_number_net_profit(strategy, hit_number)
 
@@ -955,6 +956,7 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
             outcome = "win"
         else:
             step = max_steps
+            trade_staked = base_units * ((2 ** max_steps) - 1) * unit
             total_loss_units = base_units * ((2 ** max_steps) - 1)
             profit = -total_loss_units * unit
             outcome = "loss"
@@ -965,6 +967,7 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
 
         trades.append({
             "outcome": outcome,
+            "trade_staked": round(trade_staked, 2),
             "delay": delay,
             "threshold": threshold,
             "wait_after_entry": wait_after_entry,
@@ -998,6 +1001,8 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
             longest_loss_streak = max(longest_loss_streak, current_loss_streak)
         else:
             current_loss_streak = 0
+
+        total_staked += float(t.get("trade_staked", 0))
 
         if t["outcome"] == "win":
             step = int(t["step"])
