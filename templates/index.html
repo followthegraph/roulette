@@ -45,11 +45,12 @@
           <h2>Strategy Alert Config</h2>
           <button type="button" id="strategyConfigClose">Close</button>
         </div>
-    
+
         <p class="strategy-config-note">
-          Muted groups/strategies stay visible in tables, but are excluded from urgency alerts and cross-board counts.
+          Muted groups/strategies stay visible in tables, but are excluded from
+          urgency alerts and cross-board counts.
         </p>
-    
+
         <div id="strategyConfigBody"></div>
       </div>
     </div>
@@ -65,7 +66,7 @@
           </div>
           <button id="profitSimClose">Close</button>
         </div>
-    
+
         <div class="strategy-profile-controls">
           <label>Window</label>
           <select id="profitWindow">
@@ -74,27 +75,30 @@
             <option value="2500" selected>Last 2500</option>
             <option value="all">All DB</option>
           </select>
-    
+
           <label>Unit</label>
           <input id="profitUnit" type="number" value="1" min="1">
-    
+
           <label>Max Steps</label>
           <input id="profitMaxSteps" type="number" value="8" min="1" max="20">
-    
+
           <label>Min Entries</label>
           <input id="profitMinEntries" type="number" value="5" min="1">
-    
+
           <label>Table Limit</label>
           <input id="profitTableLimit" type="number" value="2000" min="1">
 
           <button type="button" id="runProfitRankBtn">Run</button>
         </div>
-    
+
         <div class="profit-sim-note">
-          This sim answers: “If this strategy was entered at its best tested percentile threshold, what would the net result have been?”
-          French bets use exact chip-layout payout modeling. Unit Size means the value of one chip; each strategy may require multiple chips as its base stake.
+          This sim answers: “If this strategy was entered at its best tested
+          percentile threshold, what would the net result have been?”
+          French bets use exact chip-layout payout modeling. Unit Size means the
+          value of one chip; each strategy may require multiple chips as its
+          base stake.
         </div>
-    
+
         <div id="profitRankBody">Choose parameters and run simulation.</div>
       </div>
     </div>
@@ -255,11 +259,13 @@
           <div id="bestOpportunitiesSubtitle"></div>
         </div>
         <div style="display:flex; gap:8px;">
-          <button type="button" id="toggleBestOpportunitiesBtn">Collapse</button>
-          <button type="button" id="refreshBestOpportunitiesBtn">Refresh</button>
+          <button type="button"
+            id="toggleBestOpportunitiesBtn">Collapse</button>
+          <button type="button"
+            id="refreshBestOpportunitiesBtn">Refresh</button>
         </div>
       </div>
-    
+
       <div id="bestOpportunitiesGrid" class="best-opportunities-grid">
         Loading opportunities...
       </div>
@@ -467,16 +473,19 @@
             <option value="2500">Last 2500</option>
             <option value="all">All</option>
           </select>
-        
+
           <label>Success Rolls</label>
-          <input id="backtestSuccessRolls" type="number" value="5" min="1" max="25">
-        
+          <input id="backtestSuccessRolls" type="number" value="5" min="1"
+            max="25">
+
           <label>Min Entries</label>
-          <input id="backtestMinEntries" type="number" value="8" min="1" max="100">
-        
+          <input id="backtestMinEntries" type="number" value="8" min="1"
+            max="100">
+
           <label>Max Wait Limit</label>
-          <input id="backtestMaxWaitLimit" type="number" placeholder="optional" min="1" max="100">
-        
+          <input id="backtestMaxWaitLimit" type="number" placeholder="optional"
+            min="1" max="100">
+
           <button type="button" id="runBacktestBtn">Run Backtest</button>
         </div>
 
@@ -917,6 +926,28 @@ function getStreetSpreadMetrics(dataRows, limit) {
   if (topN.length < limit) return null;
   const topStreetNames = topN.map(row => row.baseName).sort((a, b) => streetOrder.indexOf(a) - streetOrder.indexOf(b));
   const topStreetSet = new Set(topStreetNames);
+  // const topStreets = (data || [])
+  // .filter(row => {
+  //   const name = normalizeStrategyName(row["Betting Strategy"]);
+  //   return name && name.includes("Street") && !name.startsWith("Adj Street");
+  // })
+  // .map(row => {
+  //   const name = normalizeStrategyName(row["Betting Strategy"]);
+  //   const scoreInfo = scoreStrategyRow(row);
+
+  //   return {
+  //     row,
+  //     name,
+  //     score: Number(scoreInfo.score),
+  //     className: scoreInfo.className,
+  //     delay: getCurrentDelayForRow(row),
+  //     riskLabel: getRiskLabelForRow(row),
+  //   };
+  // })
+  // .filter(x => Number.isFinite(x.score))
+  // .sort((a, b) => b.score - a.score || b.delay - a.delay)
+  // .slice(0, getStreetLimit());
+
   const numbers = [...new Set(topStreetNames.flatMap(name => generalBets[name] || []))];
 
   const range1 = new Set(Array.from({ length: 12 }, (_, i) => i + 1));
@@ -1233,14 +1264,13 @@ function buildUrgencySnapshot(candidates) {
           }
           updateColdestTicker(lastSeenMap);
         }
-        function updateTopStreetsTicker(data) {
-    const audio = document.getElementById("dingSound");
+  function updateTopStreetsTicker(data) {
     const streetOrder = [
       "First Street", "Second Street", "Third Street", "Fourth Street",
       "Fifth Street", "Sixth Street", "Seventh Street", "Eighth Street",
       "Ninth Street", "Tenth Street", "Eleventh Street", "Twelfth Street"
     ];
-
+    const topAdjacentStreets = getTopStrategiesByScore(data, "Adj Street", 2);
     const stripParentheses = name => name.split("(")[0].trim();
 
     const streetData = data.filter(row => {
@@ -1248,14 +1278,16 @@ function buildUrgencySnapshot(candidates) {
       return streetOrder.includes(baseName) && row["BetType"] === "General";
     });
 
-    streetData.sort((a, b) =>
-      parseFloat(b["Rolls Since Last Hit"]) - parseFloat(a["Rolls Since Last Hit"])
-    );
-
     const limit = getStreetLimit();
-    const topN = streetData.slice(0, limit);
-    const topStreetNames = topN.map(row =>
-      stripParentheses(row["Betting Strategy"]?.replace(/^'/, ""))
+
+    const topStreetScoreItems = getTopStrategiesByScore(data, "", limit)
+      .filter(item =>
+        item.name.includes("Street") &&
+        !item.name.startsWith("Adj Street")
+      );
+
+    const topStreetNames = topStreetScoreItems.map(item =>
+      stripParentheses(item.name)
     );
 
     topStreetNames.sort((a, b) =>
@@ -1472,14 +1504,80 @@ function buildUrgencySnapshot(candidates) {
         labelContainer.style.padding = "6px 10px";
         labelContainer.style.borderRadius = "4px";
         labelContainer.style.animation = "fadeInScale 0.3s ease-out";
-        audio?.play();
       } else {
         labelContainer.style.backgroundColor = "transparent";
         labelContainer.style.padding = "";
         labelContainer.style.animation = "none";
       }
     }
+
+    const topStreetsHtml = `
+      <div class="street-subsection-title">Top Streets by Score</div>
+      <div class="street-ticker-items">
+        ${topStreetScoreItems.map(item => `
+          <button
+            type="button"
+            class="street-pill ${item.className}"
+            onclick="highlightHeatboxesForStrategy('${item.name.replace(/'/g, "\\'")}')"
+            title="Score ${item.score} | Delay ${item.delay} | Risk ${item.riskLabel}"
+          >
+            ${displayStrategyName(item.name)}
+            <span class="street-pill-score">${item.score}</span>
+          </button>
+        `).join("")}
+      </div>
+    `;
+    const adjacentHtml = topAdjacentStreets.length
+      ? `
+        <div class="street-subsection-title">Top Adjacent Streets</div>
+        <div class="street-ticker-items">
+          ${topAdjacentStreets.map(item => `
+            <button
+              type="button"
+              class="street-pill ${item.className}"
+              onclick="highlightHeatboxesForStrategy('${item.name.replace(/'/g, "\\'")}')"
+              title="Score ${item.score} | Delay ${item.delay} | Risk ${item.riskLabel}"
+            >
+              ${displayStrategyName(item.name)}
+              <span class="street-pill-score">${item.score}</span>
+            </button>
+          `).join("")}
+        </div>
+      `
+      : "";
+
+      streetTicker.innerHTML = `
+        ${topStreetsHtml}
+        ${adjacentHtml}
+      `;
+
+
   }
+
+function getTopStrategiesByScore(data, strategyPrefix, limit = 2) {
+  return (data || [])
+    .filter(row => {
+      const name = normalizeStrategyName(row["Betting Strategy"]);
+      return name && name.startsWith(strategyPrefix);
+    })
+    .map(row => {
+      const name = normalizeStrategyName(row["Betting Strategy"]);
+      const scoreInfo = scoreStrategyRow(row);
+
+      return {
+        row,
+        name,
+        score: Number(scoreInfo.score),
+        className: scoreInfo.className,
+        delay: getCurrentDelayForRow(row),
+        riskLabel: getRiskLabelForRow(row),
+      };
+    })
+    .filter(x => Number.isFinite(x.score))
+    .sort((a, b) => b.score - a.score || b.delay - a.delay)
+    .slice(0, limit);
+}
+
   function updateNeighborsPanel(rolls) {
   populateNeighborsControls();
   const centerSelect = document.getElementById('neighborsCenterSelect');
