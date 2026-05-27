@@ -266,7 +266,17 @@ def run_remote_action(server, action):
     }
 
 def get_base_units_for_strategy(strategy):
-    s = strategy.lower()
+    s = str(strategy or "").lstrip("'").strip()
+
+    french_units = {
+        "Zero": 4,
+        "Tiers": 6,
+        "Orphelins": 5,
+        "Voisins Du Zero": 9,
+    }
+
+    if s in french_units:
+        return french_units[s]
 
     joined_markers = [
         "crossfire",
@@ -279,7 +289,7 @@ def get_base_units_for_strategy(strategy):
         "adj street",
     ]
 
-    if any(m in s for m in joined_markers):
+    if any(m in s.lower() for m in joined_markers):
         return 2
 
     return 1
@@ -821,6 +831,45 @@ def get_net_profit_for_strategy_bundle(strategy):
 
     return 1
 
+def get_number_net_profit(strategy, hit_number):
+    s = str(strategy or "").lstrip("'").strip()
+    n = int(hit_number)
+
+    # Net profit = gross win minus total stake for the whole strategy bundle.
+    # These are simplified French bet approximations using standard chip coverage.
+
+    if s == "Voisins Du Zero":
+        # 9 units total.
+        # Straight-up covered numbers: 35 - 8 = 27 net.
+        # Split-covered numbers: 17 - 8 = 9 net.
+        straight = {0, 3, 12, 15, 26, 32, 35}
+        if n in straight:
+            return 27
+        return 9
+
+    if s == "Tiers":
+        # 6 splits total.
+        # Any hit wins one split: 17 - 5 = 12 net.
+        return 12
+
+    if s == "Orphelins":
+        # 5 units total.
+        # 1 straight-up on 1: 35 - 4 = 31 net.
+        # Remaining numbers are splits: 17 - 4 = 13 net.
+        if n == 1:
+            return 31
+        return 13
+
+    if s == "Zero":
+        # 4 units total.
+        # Straight-up 26: 35 - 3 = 32 net.
+        # Splits: 17 - 3 = 14 net.
+        if n == 26:
+            return 32
+        return 14
+
+    return None
+
 def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1, max_steps=8):
     numbers = get_strategy_numbers(strategy)
 
@@ -831,7 +880,13 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
     rolls = list(reversed(rows))
     nums = [int(r["number"]) for r in rolls]
 
-    hit_indices = [i for i, n in enumerate(nums) if n in numbers]
+    hit_events = [
+        {"index": i, "number": n}
+        for i, n in enumerate(nums)
+        if n in numbers
+    ]
+
+    hit_indices = [h["index"] for h in hit_events]
 
     delays = [
         hit_indices[i] - hit_indices[i - 1]
@@ -874,9 +929,9 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
     peak = 0
     max_drawdown = 0
 
-    for delay in delays:
-        if delay < threshold:
-            continue
+    for event_index in range(1, len(hit_events)):
+        delay = hit_events[event_index]["index"] - hit_events[event_index - 1]["index"]
+        hit_number = hit_events[event_index]["number"]
 
         wait_after_entry = delay - threshold
 
@@ -885,10 +940,18 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
             stake_units = base_units * (2 ** step)
             total_prior_loss_units = base_units * ((2 ** step) - 1)
 
-            profit = (
-                stake_units * net_profit_per_unit * unit
-                - total_prior_loss_units * unit
-            )
+            number_net = get_number_net_profit(strategy, hit_number)
+
+            if number_net is not None:
+                profit = (
+                    (2 ** step) * number_net * unit
+                    - total_prior_loss_units * unit
+                )
+            else:
+                profit = (
+                    stake_units * net_profit_per_unit * unit
+                    - total_prior_loss_units * unit
+                )
             outcome = "win"
         else:
             step = max_steps
@@ -907,7 +970,9 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
             "wait_after_entry": wait_after_entry,
             "step": step,
             "profit": round(profit, 2),
-            "bankroll_after": round(bankroll, 2)
+            "bankroll_after": round(bankroll, 2),
+            "hit_number": hit_number,
+            "payout_model": "per_number" if get_number_net_profit(strategy, hit_number) is not None else "bundle",
         })
 
     wins = sum(1 for t in trades if t["outcome"] == "win")
@@ -972,6 +1037,7 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         "largest_loss": largest_loss,
         "longest_loss_streak": longest_loss_streak,
         "trades": trades[-50:],
+        "payout_model": "per_number" if strategy in ("Zero", "Tiers", "Orphelins", "Voisins Du Zero") else "bundle",
     }
 
 @app.route("/profit-sim.json")
