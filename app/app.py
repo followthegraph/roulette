@@ -870,7 +870,7 @@ def get_number_net_profit(strategy, hit_number):
 
     return None
 
-def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1, max_steps=8):
+def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1, max_steps=8, table_limit=2000):
     numbers = get_strategy_numbers(strategy)
 
     if not numbers:
@@ -938,27 +938,34 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         if wait_after_entry < max_steps:
             step = wait_after_entry
             stake_units = base_units * (2 ** step)
-            total_prior_loss_units = base_units * ((2 ** step) - 1)
-            trade_staked = base_units * ((2 ** (step + 1)) - 1) * unit
 
-            number_net = get_number_net_profit(strategy, hit_number)
-
-            if number_net is not None:
-                profit = (
-                    (2 ** step) * number_net * unit
-                    - total_prior_loss_units * unit
-                )
+            if stake_units * unit > table_limit:
+                trade_staked = table_limit
+                profit = -table_limit
+                outcome = "table_limit_loss"
             else:
-                profit = (
-                    stake_units * net_profit_per_unit * unit
-                    - total_prior_loss_units * unit
-                )
-            outcome = "win"
+                total_prior_loss_units = base_units * ((2 ** step) - 1)
+                trade_staked = base_units * ((2 ** (step + 1)) - 1) * unit
+
+                number_net = get_number_net_profit(strategy, hit_number)
+
+                if number_net is not None:
+                    profit = (
+                        (2 ** step) * number_net * unit
+                        - total_prior_loss_units * unit
+                    )
+                else:
+                    profit = (
+                        stake_units * net_profit_per_unit * unit
+                        - total_prior_loss_units * unit
+                    )
+
+                outcome = "win"
         else:
             step = max_steps
-            trade_staked = base_units * ((2 ** max_steps) - 1) * unit
-            total_loss_units = base_units * ((2 ** max_steps) - 1)
-            profit = -total_loss_units * unit
+            raw_loss = base_units * ((2 ** max_steps) - 1) * unit
+            trade_staked = min(raw_loss, table_limit)
+            profit = -trade_staked
             outcome = "loss"
 
         bankroll += profit
@@ -1003,12 +1010,6 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
             current_loss_streak = 0
 
         total_staked += float(t.get("trade_staked", 0))
-
-        if t["outcome"] == "win":
-            step = int(t["step"])
-            total_staked += base_units * ((2 ** (step + 1)) - 1) * unit
-        else:
-            total_staked += base_units * ((2 ** max_steps) - 1) * unit
 
     roi = round((net_profit / total_staked) * 100, 2) if total_staked else None
     profit_factor = round(gross_profit / abs(gross_loss), 2) if gross_loss < 0 else None
