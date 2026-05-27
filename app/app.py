@@ -879,65 +879,6 @@ FRENCH_BETS = {
     }
 }
 
-def calculate_french_hit_profit(strategy, hit_number, progression_multiplier=1):
-    config = FRENCH_BETS.get(strategy)
-    if not config:
-        return None
-
-    total_stake = config["base_units"] * progression_multiplier
-
-    gross_win = 0
-
-    for bet in config["bets"]:
-        if hit_number in bet["numbers"]:
-            gross_win += (
-                bet["chips"]
-                * progression_multiplier
-                * bet["payout"]
-            )
-
-    return gross_win - total_stake
-
-
-# def get_number_net_profit(strategy, hit_number):
-#     s = str(strategy or "").lstrip("'").strip()
-#     n = int(hit_number)
-
-#     # Net profit = gross win minus total stake for the whole strategy bundle.
-#     # These are simplified French bet approximations using standard chip coverage.
-
-#     if s == "Voisins Du Zero":
-#         # 9 units total.
-#         # Straight-up covered numbers: 35 - 8 = 27 net.
-#         # Split-covered numbers: 17 - 8 = 9 net.
-#         straight = {0, 3, 12, 15, 26, 32, 35}
-#         if n in straight:
-#             return 27
-#         return 9
-
-#     if s == "Tiers":
-#         # 6 splits total.
-#         # Any hit wins one split: 17 - 5 = 12 net.
-#         return 12
-
-#     if s == "Orphelins":
-#         # 5 units total.
-#         # 1 straight-up on 1: 35 - 4 = 31 net.
-#         # Remaining numbers are splits: 17 - 4 = 13 net.
-#         if n == 1:
-#             return 31
-#         return 13
-
-#     if s == "Zero":
-#         # 4 units total.
-#         # Straight-up 26: 35 - 3 = 32 net.
-#         # Splits: 17 - 3 = 14 net.
-#         if n == 26:
-#             return 32
-#         return 14
-
-#     return None
-
 def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1, max_steps=8, table_limit=2000):
     numbers = get_strategy_numbers(strategy)
 
@@ -1055,7 +996,7 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
             "profit": round(profit, 2),
             "bankroll_after": round(bankroll, 2),
             "hit_number": hit_number,
-            "payout_model": "per_number" if get_number_net_profit(strategy, hit_number) is not None else "bundle",
+            "payout_model": "french_exact" if strategy in FRENCH_BETS else "bundle",
         })
 
     wins = sum(1 for t in trades if t["outcome"] == "win")
