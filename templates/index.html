@@ -926,27 +926,13 @@ function getStreetSpreadMetrics(dataRows, limit) {
   if (topN.length < limit) return null;
   const topStreetNames = topN.map(row => row.baseName).sort((a, b) => streetOrder.indexOf(a) - streetOrder.indexOf(b));
   const topStreetSet = new Set(topStreetNames);
-  // const topStreets = (data || [])
-  // .filter(row => {
-  //   const name = normalizeStrategyName(row["Betting Strategy"]);
-  //   return name && name.includes("Street") && !name.startsWith("Adj Street");
-  // })
-  // .map(row => {
-  //   const name = normalizeStrategyName(row["Betting Strategy"]);
-  //   const scoreInfo = scoreStrategyRow(row);
+  const nthStreetName = topStreetNames[topStreetNames.length - 1];
 
-  //   return {
-  //     row,
-  //     name,
-  //     score: Number(scoreInfo.score),
-  //     className: scoreInfo.className,
-  //     delay: getCurrentDelayForRow(row),
-  //     riskLabel: getRiskLabelForRow(row),
-  //   };
-  // })
-  // .filter(x => Number.isFinite(x.score))
-  // .sort((a, b) => b.score - a.score || b.delay - a.delay)
-  // .slice(0, getStreetLimit());
+  const nthRow = streetData.find(row =>
+    stripParentheses(
+      String(row["Betting Strategy"] || "").replace(/^'/, "")
+    ) === nthStreetName
+  );
 
   const numbers = [...new Set(topStreetNames.flatMap(name => generalBets[name] || []))];
 
@@ -1271,10 +1257,12 @@ function buildUrgencySnapshot(candidates) {
       "Ninth Street", "Tenth Street", "Eleventh Street", "Twelfth Street"
     ];
     const topAdjacentStreets = getTopStrategiesByScore(data, "Adj Street", 2);
-    const stripParentheses = name => name.split("(")[0].trim();
+    const stripParentheses = name =>
+      String(name || "").split("(")[0].trim();
 
     const streetData = data.filter(row => {
-      const baseName = stripParentheses(row["Betting Strategy"]?.replace(/^'/, ""));
+      const strategyName = String(row["Betting Strategy"] || "");
+      const baseName = stripParentheses(strategyName.replace(/^'/, ""));
       return streetOrder.includes(baseName) && row["BetType"] === "General";
     });
 
@@ -1438,7 +1426,6 @@ function buildUrgencySnapshot(candidates) {
       container.parentElement.insertBefore(maxDelayContainer, labelContainer.nextSibling);
     }
 
-    const nthRow = topN[topN.length - 1];
     if (nthRow) {
       const name = stripParentheses(nthRow["Betting Strategy"]?.replace(/^'/, ""));
       const delay = parseFloat(nthRow["Rolls Since Last Hit"]);
