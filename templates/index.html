@@ -933,6 +933,28 @@ function getStreetSpreadMetrics(dataRows, limit) {
       String(row["Betting Strategy"] || "").replace(/^'/, "")
     ) === nthStreetName
   );
+  
+  // const topStreets = (data || [])
+  // .filter(row => {
+  //   const name = normalizeStrategyName(row["Betting Strategy"]);
+  //   return name && name.includes("Street") && !name.startsWith("Adj Street");
+  // })
+  // .map(row => {
+  //   const name = normalizeStrategyName(row["Betting Strategy"]);
+  //   const scoreInfo = scoreStrategyRow(row);
+
+  //   return {
+  //     row,
+  //     name,
+  //     score: Number(scoreInfo.score),
+  //     className: scoreInfo.className,
+  //     delay: getCurrentDelayForRow(row),
+  //     riskLabel: getRiskLabelForRow(row),
+  //   };
+  // })
+  // .filter(x => Number.isFinite(x.score))
+  // .sort((a, b) => b.score - a.score || b.delay - a.delay)
+  // .slice(0, getStreetLimit());
 
   const numbers = [...new Set(topStreetNames.flatMap(name => generalBets[name] || []))];
 
@@ -1257,30 +1279,38 @@ function buildUrgencySnapshot(candidates) {
       "Ninth Street", "Tenth Street", "Eleventh Street", "Twelfth Street"
     ];
     const topAdjacentStreets = getTopStrategiesByScore(data, "Adj Street", 2);
-    const stripParentheses = name =>
-      String(name || "").split("(")[0].trim();
-
-    const streetData = data.filter(row => {
-      const strategyName = String(row["Betting Strategy"] || "");
-      const baseName = stripParentheses(strategyName.replace(/^'/, ""));
-      return streetOrder.includes(baseName) && row["BetType"] === "General";
-    });
 
     const limit = getStreetLimit();
 
-    const topStreetScoreItems = getTopStrategiesByScore(data, "", limit)
-      .filter(item =>
-        item.name.includes("Street") &&
-        !item.name.startsWith("Adj Street")
+    const stripParentheses = name =>
+      String(name || "").split("(")[0].trim();
+
+    const streetData = (data || []).filter(row => {
+      const baseName = stripParentheses(row["Betting Strategy"]);
+      return (
+        streetOrder.includes(baseName) &&
+        row["BetType"] === "General"
       );
+    });
 
-    const topStreetNames = topStreetScoreItems.map(item =>
-      stripParentheses(item.name)
+    streetData.sort((a, b) =>
+      parseFloat(b["Rolls Since Last Hit"]) -
+      parseFloat(a["Rolls Since Last Hit"])
     );
 
-    topStreetNames.sort((a, b) =>
-      streetOrder.indexOf(a) - streetOrder.indexOf(b)
-    );
+    const topN = streetData.slice(0, limit);
+
+    const topStreetNames = topN
+      .map(row =>
+        stripParentheses(
+          String(row["Betting Strategy"] || "").replace(/^'/, "")
+        )
+      )
+      .sort(
+        (a, b) =>
+          streetOrder.indexOf(a) -
+          streetOrder.indexOf(b)
+      );
 
     const range1 = new Set(Array.from({ length: 12 }, (_, i) => i + 1));   // 1–12
     const range2 = new Set(Array.from({ length: 12 }, (_, i) => i + 13));  // 13–24
@@ -1385,7 +1415,9 @@ function buildUrgencySnapshot(candidates) {
       const color = colorPalette[idx % colorPalette.length];
       group.forEach(name => {
         const fullRow = streetData.find(row =>
-          stripParentheses(row["Betting Strategy"]?.replace(/^'/, "")) === name
+          stripParentheses(
+            String(row["Betting Strategy"] || "").replace(/^'/, "")
+          ) === name
         );
         const rawLabel = fullRow?.["Betting Strategy"] ?? "";
         const match = rawLabel.match(/\(([^)]+)\)/);
@@ -1401,6 +1433,44 @@ function buildUrgencySnapshot(candidates) {
         container.appendChild(div);
       });
     });
+
+    if (topAdjacentStreets.length) {
+      const wrapper = document.createElement("div");
+      wrapper.style.marginTop = "10px";
+      wrapper.style.display = "flex";
+      wrapper.style.flexWrap = "wrap";
+      wrapper.style.alignItems = "center";
+      wrapper.style.gap = "6px";
+
+      const label = document.createElement("div");
+      label.textContent = "🔥 Top Adjacent Streets:";
+      label.style.fontWeight = "bold";
+      label.style.color = "#333";
+      label.style.marginRight = "6px";
+
+      wrapper.appendChild(label);
+
+      topAdjacentStreets.forEach(item => {
+        const div = document.createElement("div");
+
+        div.textContent =
+          `${displayStrategyName(item.name)} (${item.score})`;
+
+        div.className = `street-pill ${item.className}`;
+
+        div.style.cursor = "pointer";
+        div.style.padding = "6px 8px";
+        div.style.borderRadius = "6px";
+
+        div.onclick = () => {
+          highlightHeatboxesForStrategy(item.name);
+        };
+
+        wrapper.appendChild(div);
+      });
+
+      container.appendChild(wrapper);
+    }
 
     let labelContainer = document.getElementById("streetStatsLabel");
     if (!labelContainer) {
@@ -1497,47 +1567,6 @@ function buildUrgencySnapshot(candidates) {
         labelContainer.style.animation = "none";
       }
     }
-
-    const topStreetsHtml = `
-      <div class="street-subsection-title">Top Streets by Score</div>
-      <div class="street-ticker-items">
-        ${topStreetScoreItems.map(item => `
-          <button
-            type="button"
-            class="street-pill ${item.className}"
-            onclick="highlightHeatboxesForStrategy('${item.name.replace(/'/g, "\\'")}')"
-            title="Score ${item.score} | Delay ${item.delay} | Risk ${item.riskLabel}"
-          >
-            ${displayStrategyName(item.name)}
-            <span class="street-pill-score">${item.score}</span>
-          </button>
-        `).join("")}
-      </div>
-    `;
-    const adjacentHtml = topAdjacentStreets.length
-      ? `
-        <div class="street-subsection-title">Top Adjacent Streets</div>
-        <div class="street-ticker-items">
-          ${topAdjacentStreets.map(item => `
-            <button
-              type="button"
-              class="street-pill ${item.className}"
-              onclick="highlightHeatboxesForStrategy('${item.name.replace(/'/g, "\\'")}')"
-              title="Score ${item.score} | Delay ${item.delay} | Risk ${item.riskLabel}"
-            >
-              ${displayStrategyName(item.name)}
-              <span class="street-pill-score">${item.score}</span>
-            </button>
-          `).join("")}
-        </div>
-      `
-      : "";
-
-      streetTicker.innerHTML = `
-        ${topStreetsHtml}
-        ${adjacentHtml}
-      `;
-
 
   }
 
