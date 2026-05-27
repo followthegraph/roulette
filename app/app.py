@@ -831,44 +831,112 @@ def get_net_profit_for_strategy_bundle(strategy):
 
     return 1
 
-def get_number_net_profit(strategy, hit_number):
-    s = str(strategy or "").lstrip("'").strip()
-    n = int(hit_number)
+FRENCH_BETS = {
+    "Voisins Du Zero": {
+        "base_units": 9,
+        "bets": [
+            {"type": "trio", "numbers": [0,2,3], "chips": 2, "payout": 11},
+            {"type": "split", "numbers": [4,7], "chips": 1, "payout": 17},
+            {"type": "split", "numbers": [12,15], "chips": 1, "payout": 17},
+            {"type": "split", "numbers": [18,21], "chips": 1, "payout": 17},
+            {"type": "split", "numbers": [19,22], "chips": 1, "payout": 17},
+            {"type": "corner", "numbers": [25,26,28,29], "chips": 1, "payout": 8},
+            {"type": "split", "numbers": [32,35], "chips": 1, "payout": 17},
+        ]
+    },
 
-    # Net profit = gross win minus total stake for the whole strategy bundle.
-    # These are simplified French bet approximations using standard chip coverage.
+    "Tiers": {
+        "base_units": 6,
+        "bets": [
+            {"type": "split", "numbers": [5,8], "chips": 1, "payout": 17},
+            {"type": "split", "numbers": [10,11], "chips": 1, "payout": 17},
+            {"type": "split", "numbers": [13,16], "chips": 1, "payout": 17},
+            {"type": "split", "numbers": [23,24], "chips": 1, "payout": 17},
+            {"type": "split", "numbers": [27,30], "chips": 1, "payout": 17},
+            {"type": "split", "numbers": [33,36], "chips": 1, "payout": 17},
+        ]
+    },
 
-    if s == "Voisins Du Zero":
-        # 9 units total.
-        # Straight-up covered numbers: 35 - 8 = 27 net.
-        # Split-covered numbers: 17 - 8 = 9 net.
-        straight = {0, 3, 12, 15, 26, 32, 35}
-        if n in straight:
-            return 27
-        return 9
+    "Orphelins": {
+        "base_units": 5,
+        "bets": [
+            {"type": "straight", "numbers": [1], "chips": 1, "payout": 35},
+            {"type": "split", "numbers": [6,9], "chips": 1, "payout": 17},
+            {"type": "split", "numbers": [14,17], "chips": 1, "payout": 17},
+            {"type": "split", "numbers": [17,20], "chips": 1, "payout": 17},
+            {"type": "split", "numbers": [31,34], "chips": 1, "payout": 17},
+        ]
+    },
 
-    if s == "Tiers":
-        # 6 splits total.
-        # Any hit wins one split: 17 - 5 = 12 net.
-        return 12
+    "Zero": {
+        "base_units": 4,
+        "bets": [
+            {"type": "split", "numbers": [0,3], "chips": 1, "payout": 17},
+            {"type": "split", "numbers": [12,15], "chips": 1, "payout": 17},
+            {"type": "straight", "numbers": [26], "chips": 1, "payout": 35},
+            {"type": "split", "numbers": [32,35], "chips": 1, "payout": 17},
+        ]
+    }
+}
 
-    if s == "Orphelins":
-        # 5 units total.
-        # 1 straight-up on 1: 35 - 4 = 31 net.
-        # Remaining numbers are splits: 17 - 4 = 13 net.
-        if n == 1:
-            return 31
-        return 13
+def calculate_french_hit_profit(strategy, hit_number, progression_multiplier=1):
+    config = FRENCH_BETS.get(strategy)
+    if not config:
+        return None
 
-    if s == "Zero":
-        # 4 units total.
-        # Straight-up 26: 35 - 3 = 32 net.
-        # Splits: 17 - 3 = 14 net.
-        if n == 26:
-            return 32
-        return 14
+    total_stake = config["base_units"] * progression_multiplier
 
-    return None
+    gross_win = 0
+
+    for bet in config["bets"]:
+        if hit_number in bet["numbers"]:
+            gross_win += (
+                bet["chips"]
+                * progression_multiplier
+                * bet["payout"]
+            )
+
+    return gross_win - total_stake
+
+
+# def get_number_net_profit(strategy, hit_number):
+#     s = str(strategy or "").lstrip("'").strip()
+#     n = int(hit_number)
+
+#     # Net profit = gross win minus total stake for the whole strategy bundle.
+#     # These are simplified French bet approximations using standard chip coverage.
+
+#     if s == "Voisins Du Zero":
+#         # 9 units total.
+#         # Straight-up covered numbers: 35 - 8 = 27 net.
+#         # Split-covered numbers: 17 - 8 = 9 net.
+#         straight = {0, 3, 12, 15, 26, 32, 35}
+#         if n in straight:
+#             return 27
+#         return 9
+
+#     if s == "Tiers":
+#         # 6 splits total.
+#         # Any hit wins one split: 17 - 5 = 12 net.
+#         return 12
+
+#     if s == "Orphelins":
+#         # 5 units total.
+#         # 1 straight-up on 1: 35 - 4 = 31 net.
+#         # Remaining numbers are splits: 17 - 4 = 13 net.
+#         if n == 1:
+#             return 31
+#         return 13
+
+#     if s == "Zero":
+#         # 4 units total.
+#         # Straight-up 26: 35 - 3 = 32 net.
+#         # Splits: 17 - 3 = 14 net.
+#         if n == 26:
+#             return 32
+#         return 14
+
+#     return None
 
 def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1, max_steps=8, table_limit=2000):
     numbers = get_strategy_numbers(strategy)
@@ -950,13 +1018,15 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
                 total_prior_loss_units = base_units * ((2 ** step) - 1)
                 trade_staked = base_units * ((2 ** (step + 1)) - 1) * unit
 
-                number_net = get_number_net_profit(strategy, hit_number)
+                french_profit = calculate_french_hit_profit(
+                    strategy,
+                    hit_number,
+                    progression_multiplier=(2 ** step),
+                    unit=unit
+                )
 
-                if number_net is not None:
-                    profit = (
-                        (2 ** step) * number_net * unit
-                        - total_prior_loss_units * unit
-                    )
+                if french_profit is not None:
+                    profit = french_profit - total_prior_loss_units * unit
                 else:
                     profit = (
                         stake_units * net_profit_per_unit * unit
@@ -1049,6 +1119,25 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         "payout_model": "per_number" if strategy in ("Zero", "Tiers", "Orphelins", "Voisins Du Zero") else "bundle",
         "table_limit": table_limit,
     }
+
+def calculate_french_hit_profit(strategy, hit_number, progression_multiplier=1, unit=1):
+    config = FRENCH_BETS.get(strategy)
+    if not config:
+        return None
+
+    total_stake = config["base_units"] * progression_multiplier * unit
+    gross_win = 0
+
+    for bet in config["bets"]:
+        if int(hit_number) in bet["numbers"]:
+            gross_win += (
+                bet["chips"]
+                * progression_multiplier
+                * bet["payout"]
+                * unit
+            )
+
+    return gross_win - total_stake
 
 @app.route("/profit-sim.json")
 def profit_sim():
