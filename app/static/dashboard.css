@@ -899,7 +899,7 @@
     font-weight: bold;
     cursor: pointer;
   }
-  
+
   .street-subsection-title {
     font-size: 12px;
     font-weight: bold;
@@ -917,4 +917,27 @@
     margin-left: 6px;
     font-weight: bold;
     color: #1d4ed8;
+  }
+  .profit-compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    background: white;
+  }
+  
+  .profit-compare-table th,
+  .profit-compare-table td {
+    border: 1px solid #d1d5db;
+    padding: 6px 8px;
+    text-align: left;
+    white-space: nowrap;
+  }
+  
+  .profit-compare-table th {
+    background: #f3f4f6;
+    font-weight: bold;
+  }
+  
+  .profit-compare-table tr:nth-child(even) {
+    background: #f9fafb;
   }

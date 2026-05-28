@@ -88,6 +88,7 @@
           <input id="profitTableLimit" type="number" value="2000" min="1">
 
           <button type="button" id="runProfitRankBtn">Run</button>
+          <button type="button" id="runProfitCompareBtn">Compare Windows</button>
         </div>
     
         <div class="profit-sim-note">
@@ -1622,6 +1623,107 @@ async function runProfitRank() {
   try {
     const data = await fetchProfitRank();
     renderProfitRank(data);
+  } catch (err) {
+    if (body) body.innerHTML = `<p>Error: ${err.message}</p>`;
+  }
+}
+
+async function fetchProfitCompare() {
+  const wheelId = getCurrentWheelId();
+  const unit = document.getElementById("profitUnit")?.value || "1";
+  const maxSteps = document.getElementById("profitMaxSteps")?.value || "8";
+  const minEntries = document.getElementById("profitMinEntries")?.value || "5";
+  const tableLimit = document.getElementById("profitTableLimit")?.value || "2000";
+
+  const url =
+    `/profit-compare.json` +
+    `?wheel_id=${encodeURIComponent(wheelId)}` +
+    `&unit=${encodeURIComponent(unit)}` +
+    `&max_steps=${encodeURIComponent(maxSteps)}` +
+    `&min_entries=${encodeURIComponent(minEntries)}` +
+    `&table_limit=${encodeURIComponent(tableLimit)}`;
+
+  return fetch(url).then(r => r.json());
+}
+
+function getWindowMetric(row, windowName, metric) {
+  return row?.results_by_window?.[windowName]?.[metric] ?? "—";
+}
+
+function formatMoneyish(value) {
+  if (value === null || value === undefined || value === "—") return "—";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return Math.round(n).toLocaleString();
+}
+
+function renderProfitCompare(data) {
+  const body = document.getElementById("profitRankBody");
+  if (!body) return;
+
+  if (!data.ok) {
+    body.innerHTML = `<p>Compare failed.</p>`;
+    return;
+  }
+
+  const rows = data.top_10 || data.results?.slice(0, 10) || [];
+
+  body.innerHTML = `
+    <div class="profit-summary">
+      <b>Conservative Bot Comparison</b> |
+      <b>Wheel:</b> ${data.wheel_id} |
+      <b>Table Limit:</b> ${data.table_limit}
+      <div style="margin-top:4px; font-size:12px;">
+        This favors consistency, low drawdown, many entries, and positive results across multiple windows.
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table class="profit-compare-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Strategy</th>
+            <th>Bot Score</th>
+            <th>Verdict</th>
+            <th>Profitable Windows</th>
+            <th>500 Net</th>
+            <th>2500 Net</th>
+            <th>All Net</th>
+            <th>All ROI</th>
+            <th>All Drawdown</th>
+            <th>Loss Streak</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((r, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td>${displayStrategyName(r.strategy)}</td>
+              <td><b>${r.bot_readiness}</b></td>
+              <td>${r.verdict || "—"}</td>
+              <td>${r.windows_profitable}/${r.windows_tested}</td>
+              <td>${formatMoneyish(getWindowMetric(r, "500", "net_profit"))}</td>
+              <td>${formatMoneyish(getWindowMetric(r, "2500", "net_profit"))}</td>
+              <td>${formatMoneyish(r.all_db_net_profit)}</td>
+              <td>${getWindowMetric(r, "all", "roi")}%</td>
+              <td>${formatMoneyish(getWindowMetric(r, "all", "max_drawdown"))}</td>
+              <td>${getWindowMetric(r, "all", "longest_loss_streak")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function runProfitCompare() {
+  const body = document.getElementById("profitRankBody");
+  if (body) body.innerHTML = "Running conservative bot comparison...";
+
+  try {
+    const data = await fetchProfitCompare();
+    renderProfitCompare(data);
   } catch (err) {
     if (body) body.innerHTML = `<p>Error: ${err.message}</p>`;
   }
@@ -3851,6 +3953,8 @@ document.getElementById("profitSimClose")?.addEventListener("click", () => {
 });
 
 document.getElementById("runProfitRankBtn")?.addEventListener("click", runProfitRank);
+
+document.getElementById("runProfitCompareBtn")?.addEventListener("click", runProfitCompare);
 // ===============================
 // Startup / initialization LAST
 // ===============================

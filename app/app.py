@@ -1062,24 +1062,86 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
     }
 
 def calculate_bot_readiness(result):
+    if not result:
+        return 0
+
     net_profit = result.get("net_profit") or 0
     roi = result.get("roi") or 0
     entries = result.get("total_entries") or 0
     win_rate = result.get("win_rate") or 0
     drawdown = abs(result.get("max_drawdown") or 0)
     loss_streak = result.get("longest_loss_streak") or 0
+    total_staked = result.get("total_staked") or 0
+    losses = result.get("losses") or 0
+
+    avg_profit = result.get("average_profit_per_entry") or 0
 
     score = 0
 
-    score += min(net_profit / 100, 40)
-    score += min(roi / 5, 25)
-    score += min(entries / 2, 20)
-    score += min(win_rate / 5, 20)
+    # Reward consistency and sample size.
+    score += min(entries / 25, 20)
 
-    score -= min(drawdown / 200, 25)
-    score -= loss_streak * 5
+    # Reward win rate, but cap it so 100% does not dominate everything.
+    score += min(win_rate / 5, 18)
+
+    # Reward modest but real ROI.
+    score += min(max(roi, 0) / 3, 18)
+
+    # Reward steady average profit, capped to avoid giant-win bias.
+    score += min(max(avg_profit, 0) / 5, 12)
+
+    # Reward positive net, but cap heavily.
+    score += min(max(net_profit, 0) / 500, 12)
+
+    # Penalize drawdown strongly.
+    score -= min(drawdown / 100, 30)
+
+    # Penalize loss streaks strongly.
+    score -= loss_streak * 8
+
+    # Penalize actual losses.
+    score -= losses * 0.35
+
+    # Penalize high capital turnover with low efficiency.
+    if total_staked and net_profit > 0:
+        efficiency = net_profit / total_staked
+        if efficiency < 0.05:
+            score -= 10
+        elif efficiency < 0.10:
+            score -= 5
 
     return round(max(score, 0), 2)
+
+def conservative_bot_verdict(result, windows_profitable, windows_tested):
+    if not result:
+        return "No data"
+
+    roi = result.get("roi") or 0
+    entries = result.get("total_entries") or 0
+    win_rate = result.get("win_rate") or 0
+    drawdown = abs(result.get("max_drawdown") or 0)
+    loss_streak = result.get("longest_loss_streak") or 0
+    losses = result.get("losses") or 0
+
+    if windows_tested and windows_profitable < windows_tested:
+        return "Inconsistent windows"
+
+    if entries < 25:
+        return "Low sample"
+
+    if drawdown >= 2000 or loss_streak >= 3:
+        return "High risk"
+
+    if losses == 0 and win_rate >= 99 and roi >= 10:
+        return "Conservative grinder"
+
+    if win_rate >= 95 and roi >= 8 and drawdown < 1000:
+        return "Strong conservative candidate"
+
+    if roi < 5:
+        return "Low efficiency"
+
+    return "Watchlist"
 
 def calculate_french_hit_profit(strategy, hit_number, progression_multiplier=1, unit=1):
     config = FRENCH_BETS.get(strategy)
@@ -1287,6 +1349,11 @@ def profit_compare():
         results.append({
             "strategy": strategy,
             "bot_readiness": bot_score,
+            "verdict": conservative_bot_verdict(
+                all_db_result,
+                profitable_windows,
+                len(window_scores)
+            ),
             "windows_profitable": profitable_windows,
             "windows_tested": len(window_scores),
             "best_window": best_window,
