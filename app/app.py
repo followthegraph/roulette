@@ -1061,6 +1061,26 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         "table_limit": table_limit,
     }
 
+def calculate_bot_readiness(result):
+    net_profit = result.get("net_profit") or 0
+    roi = result.get("roi") or 0
+    entries = result.get("total_entries") or 0
+    win_rate = result.get("win_rate") or 0
+    drawdown = abs(result.get("max_drawdown") or 0)
+    loss_streak = result.get("longest_loss_streak") or 0
+
+    score = 0
+
+    score += min(net_profit / 100, 40)
+    score += min(roi / 5, 25)
+    score += min(entries / 2, 20)
+    score += min(win_rate / 5, 20)
+
+    score -= min(drawdown / 200, 25)
+    score -= loss_streak * 5
+
+    return round(max(score, 0), 2)
+
 def calculate_french_hit_profit(strategy, hit_number, progression_multiplier=1, unit=1):
     config = FRENCH_BETS.get(strategy)
     if not config:
@@ -1187,6 +1207,114 @@ def profit_rank():
         "ranked": results,
         "top_10": results[:10],
         "table_limit": table_limit,
+    })
+
+@app.route("/profit-compare.json")
+def profit_compare():
+    wheel_id = request.args.get("wheel_id") or WHEEL_ID
+    unit = float(request.args.get("unit", 1))
+    max_steps = int(request.args.get("max_steps", 8))
+    min_entries = int(request.args.get("min_entries", 5))
+    table_limit = float(request.args.get("table_limit", 2000))
+
+    windows = ["500", "2500", "all"]
+    entries = ["P90", "P95", "P97", "P99"]
+
+    results = []
+
+    for strategy in get_supported_profit_strategies():
+        strategy_results = {}
+        window_scores = []
+        profitable_windows = 0
+        best_window = None
+        best_profit = None
+
+        for window in windows:
+            best = None
+
+            for entry in entries:
+                sim = run_profit_simulation(
+                    wheel_id=wheel_id,
+                    strategy=strategy,
+                    window=window,
+                    entry=entry,
+                    unit=unit,
+                    max_steps=max_steps,
+                    table_limit=table_limit,
+                )
+
+                if not sim:
+                    continue
+
+                if sim["total_entries"] < min_entries:
+                    continue
+
+                sim.pop("trades", None)
+
+                if best is None or (
+                    sim["net_profit"],
+                    sim["roi"] if sim["roi"] is not None else -999999,
+                    -abs(sim["max_drawdown"]),
+                    sim["win_rate"] if sim["win_rate"] is not None else 0,
+                ) > (
+                    best["net_profit"],
+                    best["roi"] if best["roi"] is not None else -999999,
+                    -abs(best["max_drawdown"]),
+                    best["win_rate"] if best["win_rate"] is not None else 0,
+                ):
+                    best = sim
+
+            strategy_results[window] = best
+
+            if best:
+                net_profit = best.get("net_profit", 0)
+
+                if net_profit > 0:
+                    profitable_windows += 1
+
+                if best_profit is None or net_profit > best_profit:
+                    best_profit = net_profit
+                    best_window = window
+
+                window_scores.append(calculate_bot_readiness(best))
+
+        if not window_scores:
+            continue
+
+        bot_score = round(sum(window_scores) / len(window_scores), 2)
+        all_db_result = strategy_results.get("all") or {}
+
+        results.append({
+            "strategy": strategy,
+            "bot_readiness": bot_score,
+            "windows_profitable": profitable_windows,
+            "windows_tested": len(window_scores),
+            "best_window": best_window,
+            "best_profit": best_profit,
+            "all_db_net_profit": all_db_result.get("net_profit"),
+            "all_db_roi": all_db_result.get("roi"),
+            "results_by_window": strategy_results,
+        })
+
+    results.sort(
+        key=lambda x: (
+            x["windows_profitable"],
+            x["bot_readiness"],
+            x["all_db_net_profit"] if x["all_db_net_profit"] is not None else -999999,
+        ),
+        reverse=True
+    )
+
+    return jsonify({
+        "ok": True,
+        "wheel_id": wheel_id,
+        "unit": unit,
+        "max_steps": max_steps,
+        "min_entries": min_entries,
+        "table_limit": table_limit,
+        "windows": windows,
+        "results": results,
+        "top_10": results[:10],
     })
 
 @app.route("/global-latest")
