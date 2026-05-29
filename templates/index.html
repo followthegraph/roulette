@@ -1686,13 +1686,18 @@ function renderProfitCompare(data) {
             <th>Strategy</th>
             <th>Bot Score</th>
             <th>Verdict</th>
+            <th>Entry</th>
+            <th>Threshold</th>
             <th>Profitable Windows</th>
+            <th>All Entries</th>
+            <th>All Win Rate</th>
             <th>500 Net</th>
             <th>2500 Net</th>
             <th>All Net</th>
             <th>All ROI</th>
             <th>All Drawdown</th>
             <th>Loss Streak</th>
+            <th>Details</th>
           </tr>
         </thead>
         <tbody>
@@ -1702,17 +1707,89 @@ function renderProfitCompare(data) {
               <td>${displayStrategyName(r.strategy)}</td>
               <td><b>${r.bot_readiness}</b></td>
               <td>${r.verdict || "—"}</td>
+              <td>${r.all_db_entry || "—"}</td>
+              <td>${r.all_db_threshold ?? "—"}</td>
               <td>${r.windows_profitable}/${r.windows_tested}</td>
+              <td>${formatMoneyish(r.all_db_entries)}</td>
+              <td>${r.all_db_win_rate ?? "—"}%</td>
               <td>${formatMoneyish(getWindowMetric(r, "500", "net_profit"))}</td>
               <td>${formatMoneyish(getWindowMetric(r, "2500", "net_profit"))}</td>
               <td>${formatMoneyish(r.all_db_net_profit)}</td>
               <td>${getWindowMetric(r, "all", "roi")}%</td>
               <td>${formatMoneyish(getWindowMetric(r, "all", "max_drawdown"))}</td>
               <td>${getWindowMetric(r, "all", "longest_loss_streak")}</td>
+              <td>
+                <button type="button" onclick='renderProfitCompareDetails(${JSON.stringify(r).replace(/'/g, "&apos;")})'>
+                  View
+                </button>
+              </td>
             </tr>
           `).join("")}
         </tbody>
       </table>
+    </div>
+  `;
+}
+
+function renderProfitCompareDetails(row) {
+  const body = document.getElementById("profitRankBody");
+  if (!body || !row) return;
+
+  const windows = ["500", "2500", "all"];
+
+  body.innerHTML = `
+    <div class="profit-summary">
+      <button type="button" onclick="runProfitCompare()">← Back to Compare</button>
+      <h3>${displayStrategyName(row.strategy)}</h3>
+      <div>
+        <b>Bot Score:</b> ${row.bot_readiness} |
+        <b>Verdict:</b> ${row.verdict || "—"} |
+        <b>Profitable Windows:</b> ${row.windows_profitable}/${row.windows_tested}
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table class="profit-compare-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Last 500</th>
+            <th>Last 2500</th>
+            <th>All DB</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${[
+            ["Entry", "entry"],
+            ["Threshold", "threshold"],
+            ["Entries", "total_entries"],
+            ["Win Rate", "win_rate"],
+            ["Net Profit", "net_profit"],
+            ["ROI", "roi"],
+            ["Drawdown", "max_drawdown"],
+            ["Loss Streak", "longest_loss_streak"],
+            ["Total Staked", "total_staked"],
+            ["Profit Factor", "profit_factor"],
+            ["Largest Win", "largest_win"],
+            ["Largest Loss", "largest_loss"],
+            ["Payout Model", "payout_model"],
+          ].map(([label, key]) => `
+            <tr>
+              <td><b>${label}</b></td>
+              ${windows.map(w => {
+                const val = row.results_by_window?.[w]?.[key];
+                const suffix = key === "roi" || key === "win_rate" ? "%" : "";
+                return `<td>${val ?? "—"}${val !== null && val !== undefined && val !== "—" ? suffix : ""}</td>`;
+              }).join("")}
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="profit-sim-note">
+      Entry means which percentile trigger won for that window. Threshold means the delay count where betting would begin.
+      A strategy with the same entry/threshold across all windows is usually more stable than one that changes heavily by window.
     </div>
   `;
 }
