@@ -1693,9 +1693,9 @@ function renderProfitCompare(data) {
             <th>Max Delay</th>
             <th>Worst Wait</th>
             <th>Progression</th>
-            <th>Worst Bet</th>
+            <th>Max Single Bet</th>
             <th>Table Safe</th>
-            <th>Risk Needed</th>
+            <th>Bank Roll Needed</th>
             <th>Safety</th>
             <th>Profitable Windows</th>
             <th>All Entries</th>
@@ -1737,8 +1737,6 @@ function renderProfitCompare(data) {
               <td>${getWindowMetric(r, "all", "max_progression_bet") ?? "—"}</td>
               <td>${getWindowMetric(r, "all", "historical_worst_case_table_safe") ? "✅" : "❌"}</td>
               <td>${r.all_db_risk_required ?? "—"}</td>
-              <td>${r.all_db_max_delay ?? "—"}</td>
-              <td>${r.all_db_worst_wait_after_entry ?? "—"}</td>
               <td>${r.all_db_safety_margin ?? "—"}</td>
               <td>${r.windows_profitable}/${r.windows_tested}</td>
               <td>${formatMoneyish(r.all_db_entries)}</td>
