@@ -1051,7 +1051,7 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
     )
 
     historical_risk_required = (
-        (2 ** (worst_wait_after_entry + 1)) - 2
+        base_units * ((2 ** (worst_wait_after_entry + 1)) - 2)
         if worst_wait_after_entry > 0
         else 0
     )
@@ -1107,6 +1107,7 @@ def calculate_bot_readiness(result):
     loss_streak = result.get("longest_loss_streak") or 0
     total_staked = result.get("total_staked") or 0
     losses = result.get("losses") or 0
+    risk_required = result.get("historical_risk_required") or 0
 
     avg_profit = result.get("average_profit_per_entry") or 0
 
@@ -1128,8 +1129,10 @@ def calculate_bot_readiness(result):
     score += min(max(net_profit, 0) / 500, 12)
 
     efficiency = result.get("capital_efficiency") or 0
-
     score += min(efficiency * 100, 20)
+
+    if risk_required > 0:
+        score -= min(risk_required / 20, 25)
 
     # Penalize drawdown strongly.
     score -= min(drawdown / 100, 30)
@@ -1160,26 +1163,36 @@ def conservative_bot_verdict(result, windows_profitable, windows_tested):
     drawdown = abs(result.get("max_drawdown") or 0)
     loss_streak = result.get("longest_loss_streak") or 0
     losses = result.get("losses") or 0
+    risk_required = result.get("historical_risk_required") or 0
+
+    if risk_required <= 30:
+        risk_label = "Low Capital"
+    elif risk_required <= 126:
+        risk_label = "Moderate Capital"
+    elif risk_required <= 510:
+        risk_label = "High Capital"
+    else:
+        risk_label = "Extreme Capital"
 
     if windows_tested and windows_profitable < windows_tested:
-        return "Inconsistent windows"
+        return f"Inconsistent windows ({risk_label})"
 
     if entries < 25:
-        return "Low sample"
+        return f"Low sample ({risk_label})"
 
     if drawdown >= 2000 or loss_streak >= 3:
-        return "High risk"
+        return f"High risk ({risk_label})"
 
     if losses == 0 and win_rate >= 99 and roi >= 10:
-        return "Conservative grinder"
+        return f"Conservative grinder ({risk_label})"
 
     if win_rate >= 95 and roi >= 8 and drawdown < 1000:
-        return "Strong conservative candidate"
+        return f"Strong conservative candidate ({risk_label})"
 
     if roi < 5:
-        return "Low efficiency"
+        return f"Low efficiency ({risk_label})"
 
-    return "Watchlist"
+    return f"Watchlist ({risk_label})"
 
 def calculate_french_hit_profit(strategy, hit_number, progression_multiplier=1, unit=1):
     config = FRENCH_BETS.get(strategy)
