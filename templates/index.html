@@ -1702,6 +1702,9 @@ function renderProfitCompare(data) {
             <th>All $/Hr</th>
             <th>All Net</th>
             <th>All ROI</th>
+            <th>Avg Stake</th>
+            <th>Max Stake</th>
+            <th>Efficiency</th>
             <th>All Drawdown</th>
             <th>Loss Streak</th>
             <th>$/Hr</th>
@@ -1717,7 +1720,7 @@ function renderProfitCompare(data) {
             <tr>
               <td>${i + 1}</td>
               <td>${displayStrategyName(r.strategy)}</td>
-              <td><b>${r.bot_readiness}</b></td>
+              <td><b>${r.readiness}</b></td>
               <td>${r.verdict || "—"}</td>
               <td>${r.all_db_entry || "—"}</td>
               <td>${r.all_db_threshold ?? "—"}</td>
@@ -1751,6 +1754,15 @@ function renderProfitCompare(data) {
               </td>
               <td>${formatMoneyish(r.all_db_net_profit)}</td>
               <td>${getWindowMetric(r, "all", "roi")}%</td>
+              <td>${r.all_db_avg_stake ?? "—"}</td>
+              <td>${r.all_db_max_stake ?? "—"}</td>
+              <td>
+                ${
+                  r.all_db_capital_efficiency != null
+                    ? (r.all_db_capital_efficiency * 100).toFixed(2) + "%"
+                    : "—"
+                }
+              </td>
               <td>${formatMoneyish(getWindowMetric(r, "all", "max_drawdown"))}</td>
               <td>${getWindowMetric(r, "all", "longest_loss_streak")}</td>
               <td>${r.all_db_profit_per_hour ?? "—"}</td>
@@ -1823,6 +1835,9 @@ function renderProfitCompareDetails(row) {
             ["Drawdown", "max_drawdown"],
             ["Loss Streak", "longest_loss_streak"],
             ["Total Staked", "total_staked"],
+            ["Average Stake", "avg_stake_per_entry"],
+            ["Maximum Stake", "max_stake_reached"],
+            ["Capital Efficiency", "capital_efficiency"],
             ["Profit Factor", "profit_factor"],
             ["Largest Win", "largest_win"],
             ["Largest Loss", "largest_loss"],

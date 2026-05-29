@@ -885,6 +885,9 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
     if not numbers:
         return None
 
+    max_stake_reached = 0
+    total_stake_events = 0
+    total_stake_amount = 0
     rows = get_global_rolls_for_stats(wheel_id, window)
     rolls = list(reversed(rows))
     nums = [int(r["number"]) for r in rolls]
@@ -950,6 +953,9 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         if wait_after_entry < max_steps:
             step = wait_after_entry
             stake_units = base_units * (2 ** step)
+            max_stake_reached = max(max_stake_reached, stake_units)
+            total_stake_events += 1
+            total_stake_amount += stake_units
 
             if stake_units * unit > table_limit:
                 trade_staked = table_limit
@@ -1027,6 +1033,15 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
 
     roi = round((net_profit / total_staked) * 100, 2) if total_staked else None
     profit_factor = round(gross_profit / abs(gross_loss), 2) if gross_loss < 0 else None
+    avg_stake_per_entry = (
+        round(total_stake_amount / len(trades), 2)
+        if len(trades) else None
+    )
+
+    capital_efficiency = (
+        round(net_profit / total_stake_amount, 4)
+        if total_stake_amount > 0 else None
+    )
 
     return {
         "ok": True,
@@ -1059,6 +1074,9 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         "trades": trades[-50:],
         "payout_model": "per_number" if strategy in ("Zero", "Tiers", "Orphelins", "Voisins Du Zero") else "bundle",
         "table_limit": table_limit,
+        "avg_stake_per_entry": avg_stake_per_entry,
+        "max_stake_reached": max_stake_reached,
+        "capital_efficiency": capital_efficiency,
     }
 
 def calculate_bot_readiness(result):
@@ -1092,6 +1110,10 @@ def calculate_bot_readiness(result):
 
     # Reward positive net, but cap heavily.
     score += min(max(net_profit, 0) / 500, 12)
+
+    efficiency = result.get("capital_efficiency") or 0
+
+    score += min(efficiency * 100, 20)
 
     # Penalize drawdown strongly.
     score -= min(drawdown / 100, 30)
@@ -1402,9 +1424,11 @@ def profit_compare():
                 "bots_needed_for_50_hr": all_db_result.get("bots_needed_for_50_hr"),
                 "hours_500": result_500.get("elapsed_hours"),
                 "days_500": result_500.get("elapsed_days"),
-
                 "hours_2500": result_2500.get("elapsed_hours"),
                 "days_2500": result_2500.get("elapsed_days"),
+                "all_db_avg_stake": all_db_result.get("avg_stake_per_entry"),
+                "all_db_max_stake": all_db_result.get("max_stake_reached"),
+                "all_db_capital_efficiency": all_db_result.get("capital_efficiency"),
             })
 
         results.sort(
