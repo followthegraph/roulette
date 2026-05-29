@@ -1077,6 +1077,7 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         "avg_stake_per_entry": avg_stake_per_entry,
         "max_stake_reached": max_stake_reached,
         "capital_efficiency": capital_efficiency,
+        "max_delay": max(delays) if delays else None,
     }
 
 def calculate_bot_readiness(result):
@@ -1429,6 +1430,18 @@ def profit_compare():
                 "all_db_avg_stake": all_db_result.get("avg_stake_per_entry"),
                 "all_db_max_stake": all_db_result.get("max_stake_reached"),
                 "all_db_capital_efficiency": all_db_result.get("capital_efficiency"),
+                "all_db_max_delay": all_db_result.get("delay_max") or all_db_result.get("max_delay"),
+                "all_db_worst_wait_after_entry": (
+                    (all_db_result.get("delay_max") or all_db_result.get("max_delay") or 0)
+                    - (all_db_result.get("threshold") or 0)
+                ),
+                "all_db_safety_margin": (
+                    (all_db_result.get("max_steps") or 0)
+                    - max(0, (
+                        (all_db_result.get("delay_max") or all_db_result.get("max_delay") or 0)
+                        - (all_db_result.get("threshold") or 0)
+                    ))
+                ),
             })
 
         results.sort(

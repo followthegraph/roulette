@@ -1690,6 +1690,9 @@ function renderProfitCompare(data) {
             <th>Verdict</th>
             <th>Entry</th>
             <th>Threshold</th>
+            <th>Max Delay</th>
+            <th>Worst Wait</th>
+            <th>Safety</th>
             <th>Profitable Windows</th>
             <th>All Entries</th>
             <th>All Win Rate</th>
@@ -1724,6 +1727,9 @@ function renderProfitCompare(data) {
               <td>${r.verdict || "—"}</td>
               <td>${r.all_db_entry || "—"}</td>
               <td>${r.all_db_threshold ?? "—"}</td>
+              <td>${r.all_db_max_delay ?? "—"}</td>
+              <td>${r.all_db_worst_wait_after_entry ?? "—"}</td>
+              <td>${r.all_db_safety_margin ?? "—"}</td>
               <td>${r.windows_profitable}/${r.windows_tested}</td>
               <td>${formatMoneyish(r.all_db_entries)}</td>
               <td>${r.all_db_win_rate ?? "—"}%</td>
