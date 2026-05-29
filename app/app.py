@@ -1273,138 +1273,153 @@ def profit_rank():
 
 @app.route("/profit-compare.json")
 def profit_compare():
-    wheel_id = request.args.get("wheel_id") or WHEEL_ID
-    unit = float(request.args.get("unit", 1))
-    max_steps = int(request.args.get("max_steps", 8))
-    min_entries = int(request.args.get("min_entries", 5))
-    table_limit = float(request.args.get("table_limit", 2000))
+    try:
+        wheel_id = request.args.get("wheel_id") or WHEEL_ID
+        unit = float(request.args.get("unit", 1))
+        max_steps = int(request.args.get("max_steps", 8))
+        min_entries = int(request.args.get("min_entries", 5))
+        table_limit = float(request.args.get("table_limit", 2000))
 
-    windows = ["500", "2500", "all"]
-    entries = ["P90", "P95", "P97", "P99"]
+        windows = ["500", "2500", "all"]
+        entries = ["P90", "P95", "P97", "P99"]
 
-    results = []
+        results = []
 
-    for strategy in get_supported_profit_strategies():
-        strategy_results = {}
-        window_scores = []
-        profitable_windows = 0
-        best_window = None
-        best_profit = None
+        for strategy in get_supported_profit_strategies():
+            strategy_results = {}
+            window_scores = []
+            profitable_windows = 0
+            best_window = None
+            best_profit = None
 
-        for window in windows:
-            best = None
+            for window in windows:
+                best = None
 
-            for entry in entries:
-                sim = run_profit_simulation(
-                    wheel_id=wheel_id,
-                    strategy=strategy,
-                    window=window,
-                    entry=entry,
-                    unit=unit,
-                    max_steps=max_steps,
-                    table_limit=table_limit,
-                )
+                for entry in entries:
+                    sim = run_profit_simulation(
+                        wheel_id=wheel_id,
+                        strategy=strategy,
+                        window=window,
+                        entry=entry,
+                        unit=unit,
+                        max_steps=max_steps,
+                        table_limit=table_limit,
+                    )
 
-                if not sim:
-                    continue
+                    if not sim:
+                        continue
 
-                if sim["total_entries"] < min_entries:
-                    continue
+                    if sim["total_entries"] < min_entries:
+                        continue
 
-                sim.pop("trades", None)
+                    sim.pop("trades", None)
 
-                if best is None or (
-                    sim["net_profit"],
-                    sim["roi"] if sim["roi"] is not None else -999999,
-                    -abs(sim["max_drawdown"]),
-                    sim["win_rate"] if sim["win_rate"] is not None else 0,
-                ) > (
-                    best["net_profit"],
-                    best["roi"] if best["roi"] is not None else -999999,
-                    -abs(best["max_drawdown"]),
-                    best["win_rate"] if best["win_rate"] is not None else 0,
-                ):
-                    best = sim
+                    if best is None or (
+                        sim["net_profit"],
+                        sim["roi"] if sim["roi"] is not None else -999999,
+                        -abs(sim["max_drawdown"]),
+                        sim["win_rate"] if sim["win_rate"] is not None else 0,
+                    ) > (
+                        best["net_profit"],
+                        best["roi"] if best["roi"] is not None else -999999,
+                        -abs(best["max_drawdown"]),
+                        best["win_rate"] if best["win_rate"] is not None else 0,
+                    ):
+                        best = sim
 
-            strategy_results[window] = best
+                strategy_results[window] = best
 
-            if best:
-                net_profit = best.get("net_profit", 0)
+                if best:
+                    net_profit = best.get("net_profit", 0)
 
-                if net_profit > 0:
-                    profitable_windows += 1
+                    if net_profit > 0:
+                        profitable_windows += 1
 
-                if best_profit is None or net_profit > best_profit:
-                    best_profit = net_profit
-                    best_window = window
+                    if best_profit is None or net_profit > best_profit:
+                        best_profit = net_profit
+                        best_window = window
 
-                window_scores.append(calculate_bot_readiness(best))
+                    window_scores.append(calculate_bot_readiness(best))
 
-                elapsed_hours = get_window_elapsed_hours(wheel_id, window)
+                    elapsed_hours = get_window_elapsed_hours(wheel_id, window)
 
-                if best and elapsed_hours:
-                    entries = best.get("total_entries") or 0
-                    net_profit = best.get("net_profit") or 0
+                    if best and elapsed_hours:
+                        entry_count = best.get("total_entries") or 0
+                        net_profit = best.get("net_profit") or 0
 
-                    best["elapsed_hours"] = elapsed_hours
-                    best["profit_per_hour"] = round(net_profit / elapsed_hours, 2)
-                    best["entries_per_hour"] = round(entries / elapsed_hours, 2)
-                    best["minutes_between_entries"] = round((elapsed_hours * 60) / entries, 2) if entries else None
-                    best["profit_per_entry"] = round(net_profit / entries, 2) if entries else None
-                    best["bots_needed_for_50_hr"] = round(50 / best["profit_per_hour"], 2) if best["profit_per_hour"] > 0 else None
+                        best["elapsed_hours"] = elapsed_hours
+                        best["profit_per_hour"] = round(net_profit / elapsed_hours, 2)
+                        best["entries_per_hour"] = round(entry_count / elapsed_hours, 2)
+                        best["minutes_between_entries"] = (
+                            round((elapsed_hours * 60) / entry_count, 2)
+                            if entry_count else None
+                        )
+                        best["profit_per_entry"] = (
+                            round(net_profit / entry_count, 2)
+                            if entry_count else None
+                        )
+                        best["bots_needed_for_50_hr"] = round(50 / best["profit_per_hour"], 2) if best["profit_per_hour"] > 0 else None
 
-        if not window_scores:
-            continue
+            if not window_scores:
+                continue
 
-        bot_score = round(sum(window_scores) / len(window_scores), 2)
-        all_db_result = strategy_results.get("all") or {}
+            bot_score = round(sum(window_scores) / len(window_scores), 2)
+            all_db_result = strategy_results.get("all") or {}
 
-        results.append({
-            "strategy": strategy,
-            "bot_readiness": bot_score,
-            "verdict": conservative_bot_verdict(
-                all_db_result,
-                profitable_windows,
-                len(window_scores)
+            results.append({
+                "strategy": strategy,
+                "bot_readiness": bot_score,
+                "verdict": conservative_bot_verdict(
+                    all_db_result,
+                    profitable_windows,
+                    len(window_scores)
+                ),
+                "windows_profitable": profitable_windows,
+                "windows_tested": len(window_scores),
+                "best_window": best_window,
+                "best_profit": best_profit,
+                "all_db_entry": all_db_result.get("entry"),
+                "all_db_threshold": all_db_result.get("threshold"),
+                "all_db_entries": all_db_result.get("total_entries"),
+                "all_db_win_rate": all_db_result.get("win_rate"),
+                "all_db_net_profit": all_db_result.get("net_profit"),
+                "all_db_roi": all_db_result.get("roi"),
+                "results_by_window": strategy_results,
+                "all_db_profit_per_hour": all_db_result.get("profit_per_hour"),
+                "all_db_entries_per_hour": all_db_result.get("entries_per_hour"),
+                "all_db_minutes_between_entries": all_db_result.get("minutes_between_entries"),
+                "all_db_profit_per_entry": all_db_result.get("profit_per_entry"),
+                "bots_needed_for_50_hr": all_db_result.get("bots_needed_for_50_hr"),
+            })
+
+        results.sort(
+            key=lambda x: (
+                x["windows_profitable"],
+                x["bot_readiness"],
+                x["all_db_net_profit"] if x["all_db_net_profit"] is not None else -999999,
             ),
-            "windows_profitable": profitable_windows,
-            "windows_tested": len(window_scores),
-            "best_window": best_window,
-            "best_profit": best_profit,
-            "all_db_entry": all_db_result.get("entry"),
-            "all_db_threshold": all_db_result.get("threshold"),
-            "all_db_entries": all_db_result.get("total_entries"),
-            "all_db_win_rate": all_db_result.get("win_rate"),
-            "all_db_net_profit": all_db_result.get("net_profit"),
-            "all_db_roi": all_db_result.get("roi"),
-            "results_by_window": strategy_results,
-            "all_db_profit_per_hour": all_db_result.get("profit_per_hour"),
-            "all_db_entries_per_hour": all_db_result.get("entries_per_hour"),
-            "all_db_minutes_between_entries": all_db_result.get("minutes_between_entries"),
-            "all_db_profit_per_entry": all_db_result.get("profit_per_entry"),
-            "bots_needed_for_50_hr": all_db_result.get("bots_needed_for_50_hr"),
+            reverse=True
+        )
+
+        return jsonify({
+            "ok": True,
+            "wheel_id": wheel_id,
+            "unit": unit,
+            "max_steps": max_steps,
+            "min_entries": min_entries,
+            "table_limit": table_limit,
+            "windows": windows,
+            "results": results,
+            "top_10": results[:10],
         })
+    except Exception as e:
+        import traceback
 
-    results.sort(
-        key=lambda x: (
-            x["windows_profitable"],
-            x["bot_readiness"],
-            x["all_db_net_profit"] if x["all_db_net_profit"] is not None else -999999,
-        ),
-        reverse=True
-    )
-
-    return jsonify({
-        "ok": True,
-        "wheel_id": wheel_id,
-        "unit": unit,
-        "max_steps": max_steps,
-        "min_entries": min_entries,
-        "table_limit": table_limit,
-        "windows": windows,
-        "results": results,
-        "top_10": results[:10],
-    })
+        return jsonify({
+            "ok": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
 
 def get_window_elapsed_hours(wheel_id, window):
     params = [wheel_id]
