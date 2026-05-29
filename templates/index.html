@@ -1692,6 +1692,9 @@ function renderProfitCompare(data) {
             <th>Threshold</th>
             <th>Max Delay</th>
             <th>Worst Wait</th>
+            <th>Risk Needed</th>
+            <th>Max Delay</th>
+            <th>Worst Wait</th>
             <th>Safety</th>
             <th>Profitable Windows</th>
             <th>All Entries</th>
@@ -1727,6 +1730,9 @@ function renderProfitCompare(data) {
               <td>${r.verdict || "—"}</td>
               <td>${r.all_db_entry || "—"}</td>
               <td>${r.all_db_threshold ?? "—"}</td>
+              <td>${r.all_db_max_delay ?? "—"}</td>
+              <td>${r.all_db_worst_wait ?? "—"}</td>
+              <td>${r.all_db_risk_required ?? "—"}</td>
               <td>${r.all_db_max_delay ?? "—"}</td>
               <td>${r.all_db_worst_wait_after_entry ?? "—"}</td>
               <td>${r.all_db_safety_margin ?? "—"}</td>
@@ -1829,6 +1835,9 @@ function renderProfitCompareDetails(row) {
           ${[
             ["Entry", "entry"],
             ["Threshold", "threshold"],
+            ["Max Delay", "max_delay"],
+            ["Worst Wait After Entry", "worst_wait_after_entry"],
+            ["Historical Risk Required", "historical_risk_required"],
             ["Entries", "total_entries"],
             ["Elapsed Hours", "elapsed_hours"],
             ["Elapsed Days", "elapsed_days"],
