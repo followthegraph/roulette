@@ -1473,7 +1473,6 @@ function buildUrgencySnapshot(candidates) {
         labelContainer.style.padding = "6px 10px";
         labelContainer.style.borderRadius = "4px";
         labelContainer.style.animation = "fadeInScale 0.3s ease-out";
-        audio?.play();
       } else {
         labelContainer.style.backgroundColor = "transparent";
         labelContainer.style.padding = "";
@@ -1628,6 +1627,8 @@ async function runProfitRank() {
   }
 }
 
+let lastProfitCompareData = null;
+
 async function fetchProfitCompare() {
   const wheelId = getCurrentWheelId();
   const unit = document.getElementById("profitUnit")?.value || "1";
@@ -1666,6 +1667,7 @@ function renderProfitCompare(data) {
     return;
   }
 
+  lastProfitCompareData = data;
   const rows = data.top_10 || data.results?.slice(0, 10) || [];
 
   body.innerHTML = `
@@ -1749,7 +1751,7 @@ function renderProfitCompareDetails(row) {
 
   body.innerHTML = `
     <div class="profit-summary">
-      <button type="button" onclick="runProfitCompare()">← Back to Compare</button>
+      <button type="button" onclick="renderProfitCompare(lastProfitCompareData)">← Back to Compare</button>
       <h3>${displayStrategyName(row.strategy)}</h3>
       <div>
         <b>Bot Score:</b> ${row.bot_readiness} |
@@ -3475,10 +3477,10 @@ function renderUrgencyOverlay(dataRows) {
 
 
 
-  document.addEventListener("click", () => {
-    const audio = document.getElementById('dingSound');
-    audio.play().catch(() => {}); // "Prime" the audio
-  }, { once: true });
+  // document.addEventListener("click", () => {
+  //   const audio = document.getElementById('dingSound');
+  //   audio.play().catch(() => {}); // "Prime" the audio
+  // }, { once: true });
 
   window.addEventListener('load', () => {
     const heatmap = document.getElementById("heatmapStickyWrap") || document.getElementById("heatmap");

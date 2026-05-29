@@ -1411,8 +1411,13 @@ def get_window_elapsed_hours(wheel_id, window):
     limit_clause = ""
 
     if str(window).lower() != "all":
+        try:
+            limit = max(1, int(window))
+        except Exception:
+            limit = 500
+
         limit_clause = "LIMIT ?"
-        params.append(max(1, int(window)))
+        params.append(limit)
 
     rows = global_db_rows(f"""
         SELECT created_at_utc
@@ -1425,11 +1430,18 @@ def get_window_elapsed_hours(wheel_id, window):
     if len(rows) < 2:
         return None
 
-    start = datetime.fromisoformat(rows[-1]["created_at_utc"])
-    end = datetime.fromisoformat(rows[0]["created_at_utc"])
+    try:
+        start_raw = rows[-1]["created_at_utc"].replace("Z", "+00:00")
+        end_raw = rows[0]["created_at_utc"].replace("Z", "+00:00")
 
-    hours = (end - start).total_seconds() / 3600
-    return round(hours, 4) if hours > 0 else None
+        start = datetime.fromisoformat(start_raw)
+        end = datetime.fromisoformat(end_raw)
+
+        hours = (end - start).total_seconds() / 3600
+        return round(hours, 4) if hours > 0 else None
+
+    except Exception:
+        return None
 
 @app.route("/global-latest")
 # @admin_required
