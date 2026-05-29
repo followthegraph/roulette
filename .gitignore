@@ -41,3 +41,5 @@ global/results/
 global/*.csv
 
 analysis/*.zip
+
+instructions/
