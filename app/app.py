@@ -1340,6 +1340,19 @@ def profit_compare():
 
                 window_scores.append(calculate_bot_readiness(best))
 
+                elapsed_hours = get_window_elapsed_hours(wheel_id, window)
+
+                if best and elapsed_hours:
+                    entries = best.get("total_entries") or 0
+                    net_profit = best.get("net_profit") or 0
+
+                    best["elapsed_hours"] = elapsed_hours
+                    best["profit_per_hour"] = round(net_profit / elapsed_hours, 2)
+                    best["entries_per_hour"] = round(entries / elapsed_hours, 2)
+                    best["minutes_between_entries"] = round((elapsed_hours * 60) / entries, 2) if entries else None
+                    best["profit_per_entry"] = round(net_profit / entries, 2) if entries else None
+                    best["bots_needed_for_50_hr"] = round(50 / best["profit_per_hour"], 2) if best["profit_per_hour"] > 0 else None
+
         if not window_scores:
             continue
 
@@ -1365,6 +1378,11 @@ def profit_compare():
             "all_db_net_profit": all_db_result.get("net_profit"),
             "all_db_roi": all_db_result.get("roi"),
             "results_by_window": strategy_results,
+            "all_db_profit_per_hour": all_db_result.get("profit_per_hour"),
+            "all_db_entries_per_hour": all_db_result.get("entries_per_hour"),
+            "all_db_minutes_between_entries": all_db_result.get("minutes_between_entries"),
+            "all_db_profit_per_entry": all_db_result.get("profit_per_entry"),
+            "bots_needed_for_50_hr": all_db_result.get("bots_needed_for_50_hr"),
         })
 
     results.sort(
@@ -1387,6 +1405,31 @@ def profit_compare():
         "results": results,
         "top_10": results[:10],
     })
+
+def get_window_elapsed_hours(wheel_id, window):
+    params = [wheel_id]
+    limit_clause = ""
+
+    if str(window).lower() != "all":
+        limit_clause = "LIMIT ?"
+        params.append(max(1, int(window)))
+
+    rows = global_db_rows(f"""
+        SELECT created_at_utc
+        FROM wheel_rolls
+        WHERE wheel_id = ?
+        ORDER BY seq DESC
+        {limit_clause}
+    """, tuple(params))
+
+    if len(rows) < 2:
+        return None
+
+    start = datetime.fromisoformat(rows[-1]["created_at_utc"])
+    end = datetime.fromisoformat(rows[0]["created_at_utc"])
+
+    hours = (end - start).total_seconds() / 3600
+    return round(hours, 4) if hours > 0 else None
 
 @app.route("/global-latest")
 # @admin_required

@@ -1697,6 +1697,11 @@ function renderProfitCompare(data) {
             <th>All ROI</th>
             <th>All Drawdown</th>
             <th>Loss Streak</th>
+            <th>$/Hr</th>
+            <th>Entries/Hr</th>
+            <th>Min/Entry</th>
+            <th>$/Entry</th>
+            <th>Bots for $50/Hr</th>
             <th>Details</th>
           </tr>
         </thead>
@@ -1718,6 +1723,11 @@ function renderProfitCompare(data) {
               <td>${getWindowMetric(r, "all", "roi")}%</td>
               <td>${formatMoneyish(getWindowMetric(r, "all", "max_drawdown"))}</td>
               <td>${getWindowMetric(r, "all", "longest_loss_streak")}</td>
+              <td>${r.all_db_profit_per_hour ?? "—"}</td>
+              <td>${r.all_db_entries_per_hour ?? "—"}</td>
+              <td>${r.all_db_minutes_between_entries ?? "—"}</td>
+              <td>${r.all_db_profit_per_entry ?? "—"}</td>
+              <td>${r.bots_needed_for_50_hr ?? "—"}</td>
               <td>
                 <button type="button" onclick='renderProfitCompareDetails(${JSON.stringify(r).replace(/'/g, "&apos;")})'>
                   View
