@@ -1284,7 +1284,7 @@ def profit_sim():
     return jsonify(result)
 
 @app.route("/profit-rank.json")
-def profit_rank():
+def profit_rank(exclude_table_unsafe = request.args.get("exclude_table_unsafe", "1") == "1"):
     wheel_id = request.args.get("wheel_id") or WHEEL_ID
     window = request.args.get("window", "2500")
     unit = float(request.args.get("unit", 1))
@@ -1363,7 +1363,7 @@ def profit_rank():
     })
 
 @app.route("/profit-compare.json")
-def profit_compare():
+def profit_compare(exclude_table_unsafe = request.args.get("exclude_table_unsafe", "1") == "1"):
     try:
         wheel_id = request.args.get("wheel_id") or WHEEL_ID
         unit = float(request.args.get("unit", 1))
@@ -1398,6 +1398,9 @@ def profit_compare():
                     )
 
                     if not sim:
+                        continue
+
+                    if exclude_table_unsafe and not sim.get("historical_worst_case_table_safe", True):
                         continue
 
                     if sim["total_entries"] < min_entries:
