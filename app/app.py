@@ -294,6 +294,14 @@ def get_base_units_for_strategy(strategy):
 
     return 1
 
+def get_progression_multiplier_for_strategy(strategy):
+    s = str(strategy or "").lstrip("'").strip().lower()
+
+    if s.startswith("crossfire,"):
+        return 3
+
+    return 2
+
 def get_strategy_numbers(strategy):
     strategy = str(strategy or "").lstrip("'").strip()
 
@@ -935,6 +943,7 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
 
     base_units = get_base_units_for_strategy(strategy)
     net_profit_per_unit = get_net_profit_for_strategy_bundle(strategy) or 1
+    progression_multiplier = get_progression_multiplier_for_strategy(strategy)
 
     trades = []
     bankroll = 0
@@ -952,7 +961,7 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
 
         if wait_after_entry < max_steps:
             step = wait_after_entry
-            stake_units = base_units * (2 ** step)
+            stake_units = base_units * (progression_multiplier ** step)
             max_stake_reached = max(max_stake_reached, stake_units)
             total_stake_events += 1
             total_stake_amount += stake_units
@@ -962,13 +971,25 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
                 profit = -table_limit
                 outcome = "table_limit_loss"
             else:
-                total_prior_loss_units = base_units * ((2 ** step) - 1)
-                trade_staked = base_units * ((2 ** (step + 1)) - 1) * unit
+                if progression_multiplier == 1:
+                    total_prior_loss_units = base_units * step
+                else:
+                    total_prior_loss_units = base_units * (
+                        (progression_multiplier ** step - 1)
+                        / (progression_multiplier - 1)
+                    )
+                if progression_multiplier == 1:
+                    trade_staked = base_units * (step + 1) * unit
+                else:
+                    trade_staked = base_units * (
+                        (progression_multiplier ** (step + 1) - 1)
+                        / (progression_multiplier - 1)
+                    ) * unit
 
                 french_profit = calculate_french_hit_profit(
                     strategy,
                     hit_number,
-                    progression_multiplier=(2 ** step),
+                    progression_multiplier=(progression_multiplier ** step),
                     unit=unit
                 )
 
@@ -983,7 +1004,13 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
                 outcome = "win"
         else:
             step = max_steps
-            raw_loss = base_units * ((2 ** max_steps) - 1) * unit
+            if progression_multiplier == 1:
+                raw_loss = base_units * max_steps * unit
+            else:
+                raw_loss = base_units * (
+                    (progression_multiplier ** max_steps - 1)
+                    / (progression_multiplier - 1)
+                ) * unit
             trade_staked = min(raw_loss, table_limit)
             profit = -trade_staked
             outcome = "loss"
@@ -1050,10 +1077,20 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         (max_delay or 0) - (threshold or 0)
     )
 
-    historical_risk_required = (
-        base_units * ((2 ** (worst_wait_after_entry + 1)) - 2)
-        if worst_wait_after_entry > 0
-        else 0
+    if worst_wait_after_entry > 0:
+        historical_risk_required = base_units * (
+            (progression_multiplier ** (worst_wait_after_entry + 1) - 1)
+            / (progression_multiplier - 1)
+        )
+    else:
+        historical_risk_required = 0
+
+    historical_risk_required = round(historical_risk_required * unit, 2)
+
+    max_progression_bet = base_units * (progression_multiplier ** worst_wait_after_entry) * unit
+
+    historical_worst_case_table_safe = (
+        max_progression_bet <= table_limit
     )
 
     return {
@@ -1093,6 +1130,9 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         "max_delay": max(delays) if delays else None,
         "worst_wait_after_entry": worst_wait_after_entry,
         "historical_risk_required": historical_risk_required,
+        "progression_multiplier": progression_multiplier,
+        "max_progression_bet": round(max_progression_bet, 2),
+        "historical_worst_case_table_safe": historical_worst_case_table_safe,
     }
 
 def calculate_bot_readiness(result):
