@@ -1694,7 +1694,13 @@ function renderProfitCompare(data) {
             <th>All Entries</th>
             <th>All Win Rate</th>
             <th>500 Net</th>
+            <th>500 Span</th>
             <th>2500 Net</th>
+            <th>2500 Span</th>
+            <th>500 $/Hr</th>
+            <th>2500 $/Hr</th>
+            <th>All $/Hr</th>
+            <th>All Net</th>
             <th>All Net</th>
             <th>All ROI</th>
             <th>All Drawdown</th>
@@ -1720,7 +1726,30 @@ function renderProfitCompare(data) {
               <td>${formatMoneyish(r.all_db_entries)}</td>
               <td>${r.all_db_win_rate ?? "—"}%</td>
               <td>${formatMoneyish(getWindowMetric(r, "500", "net_profit"))}</td>
+              <td>
+                ${formatSpan(
+                    getWindowMetric(r, "500", "elapsed_hours"),
+                    getWindowMetric(r, "500", "elapsed_days")
+                )}
+              </td>
+
               <td>${formatMoneyish(getWindowMetric(r, "2500", "net_profit"))}</td>
+
+              <td>
+                ${formatSpan(
+                    getWindowMetric(r, "2500", "elapsed_hours"),
+                    getWindowMetric(r, "2500", "elapsed_days")
+                )}
+              </td>
+              <td>
+                ${getWindowMetric(r, "500", "profit_per_hour") ?? "—"}
+              </td>
+              <td>
+                ${getWindowMetric(r, "2500", "profit_per_hour") ?? "—"}
+              </td>
+              <td>
+                ${r.all_db_profit_per_hour ?? "—"}
+              </td>
               <td>${formatMoneyish(r.all_db_net_profit)}</td>
               <td>${getWindowMetric(r, "all", "roi")}%</td>
               <td>${formatMoneyish(getWindowMetric(r, "all", "max_drawdown"))}</td>
@@ -1741,6 +1770,15 @@ function renderProfitCompare(data) {
       </table>
     </div>
   `;
+}
+
+function formatSpan(hours, days) {
+  if (hours == null) return "—";
+
+  const h = Number(hours).toFixed(1);
+  const d = Number(days || (hours / 24)).toFixed(1);
+
+  return `${h}h (${d}d)`;
 }
 
 function renderProfitCompareDetails(row) {
@@ -1775,6 +1813,11 @@ function renderProfitCompareDetails(row) {
             ["Entry", "entry"],
             ["Threshold", "threshold"],
             ["Entries", "total_entries"],
+            ["Elapsed Hours", "elapsed_hours"],
+            ["Elapsed Days", "elapsed_days"],
+            ["Profit / Hour", "profit_per_hour"],
+            ["Entries / Hour", "entries_per_hour"],
+            ["Minutes Between Entries", "minutes_between_entries"],
             ["Win Rate", "win_rate"],
             ["Net Profit", "net_profit"],
             ["ROI", "roi"],

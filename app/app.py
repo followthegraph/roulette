@@ -1348,6 +1348,13 @@ def profit_compare():
                         net_profit = best.get("net_profit") or 0
 
                         best["elapsed_hours"] = elapsed_hours
+                        elapsed_hours = get_window_elapsed_hours(wheel_id, window)
+
+                        if best:
+                            best["elapsed_hours"] = elapsed_hours
+
+                            if elapsed_hours:
+                                best["elapsed_days"] = round(elapsed_hours / 24, 2)
                         best["profit_per_hour"] = round(net_profit / elapsed_hours, 2)
                         best["entries_per_hour"] = round(entry_count / elapsed_hours, 2)
                         best["minutes_between_entries"] = (
@@ -1365,6 +1372,9 @@ def profit_compare():
 
             bot_score = round(sum(window_scores) / len(window_scores), 2)
             all_db_result = strategy_results.get("all") or {}
+
+            result_500 = strategy_results.get("500") or {}
+            result_2500 = strategy_results.get("2500") or {}
 
             results.append({
                 "strategy": strategy,
@@ -1390,6 +1400,11 @@ def profit_compare():
                 "all_db_minutes_between_entries": all_db_result.get("minutes_between_entries"),
                 "all_db_profit_per_entry": all_db_result.get("profit_per_entry"),
                 "bots_needed_for_50_hr": all_db_result.get("bots_needed_for_50_hr"),
+                "hours_500": result_500.get("elapsed_hours"),
+                "days_500": result_500.get("elapsed_days"),
+
+                "hours_2500": result_2500.get("elapsed_hours"),
+                "days_2500": result_2500.get("elapsed_days"),
             })
 
         results.sort(
