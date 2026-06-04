@@ -422,34 +422,97 @@ def json_write(path: Path, data):
         json.dump(data, f, indent=2)
     tmp_path.replace(path)
 
+def get_latest_cohort(wheel_id):
+    rows = global_db_rows("""
+        SELECT *
+        FROM wheel_roll_cohorts
+        WHERE wheel_id = ?
+        ORDER BY cohort_id DESC
+        LIMIT 1
+    """, (wheel_id,))
+    return rows[0] if rows else None
+
+
+def get_latest_valid_cohort(wheel_id):
+    rows = global_db_rows("""
+        SELECT *
+        FROM wheel_roll_cohorts
+        WHERE wheel_id = ?
+          AND is_valid = 1
+        ORDER BY cohort_id DESC
+        LIMIT 1
+    """, (wheel_id,))
+    return rows[0] if rows else None
+
+
 def get_global_rolls_for_stats(wheel_id, window="500"):
-    params = [wheel_id]
-    limit_clause = ""
+    window = str(window).lower()
 
-    if str(window).lower() != "all":
-        try:
-            limit = max(1, int(window))
-        except Exception:
-            limit = 500
+    if window == "all":
+        cohort = get_latest_valid_cohort(wheel_id)
 
-        limit_clause = "LIMIT ?"
-        params.append(limit)
+        if not cohort:
+            return []
 
-    rows = global_db_rows(f"""
+        rows = global_db_rows("""
+            SELECT number, color, seq, created_at_utc
+            FROM wheel_rolls
+            WHERE wheel_id = ?
+              AND seq BETWEEN ? AND ?
+            ORDER BY seq DESC
+        """, (
+            wheel_id,
+            cohort["start_seq"],
+            cohort["end_seq"]
+        ))
+
+        return [
+            {
+                "number": int(r["number"]),
+                "color": r.get("color", ""),
+                "seq": r.get("seq"),
+                "created_at_utc": r.get("created_at_utc"),
+                "cohort_id": cohort["cohort_id"],
+                "cohort_valid": cohort["is_valid"],
+            }
+            for r in rows
+        ]
+
+    try:
+        limit = max(1, int(window))
+    except Exception:
+        limit = 500
+
+    cohort = get_latest_cohort(wheel_id)
+
+    if not cohort:
+        return []
+
+    if int(cohort["roll_count"]) < limit:
+        return []
+
+    rows = global_db_rows("""
         SELECT number, color, seq, created_at_utc
         FROM wheel_rolls
         WHERE wheel_id = ?
+          AND seq BETWEEN ? AND ?
         ORDER BY seq DESC
-        {limit_clause}
-    """, tuple(params))
+        LIMIT ?
+    """, (
+        wheel_id,
+        cohort["start_seq"],
+        cohort["end_seq"],
+        limit
+    ))
 
-    # strategy generator expects newest-first, same as roulette_data.json
     return [
         {
             "number": int(r["number"]),
             "color": r.get("color", ""),
             "seq": r.get("seq"),
             "created_at_utc": r.get("created_at_utc"),
+            "cohort_id": cohort["cohort_id"],
+            "cohort_valid": cohort["is_valid"],
         }
         for r in rows
     ]
@@ -1296,6 +1359,19 @@ def profit_rank():
     entries = ["P90", "P95", "P97", "P99"]
     results = []
 
+    rolls_available = get_global_rolls_for_stats(wheel_id, window)
+
+    if not rolls_available:
+        return jsonify({
+            "ok": False,
+            "wheel_id": wheel_id,
+            "window": window,
+            "message": (
+                f"Window {window} is not available for the latest cohort yet. "
+                "Wait until the current cohort has enough rolls."
+            )
+        }), 409
+
     for strategy in get_supported_profit_strategies():
         best = None
 
@@ -1390,6 +1466,16 @@ def profit_compare():
 
             for window in windows:
                 best = None
+
+                available_rolls = get_global_rolls_for_stats(wheel_id, window)
+
+                if not available_rolls:
+                    strategy_results[window] = {
+                        "ok": False,
+                        "unavailable": True,
+                        "reason": f"Window {window} is not available for the latest cohort yet."
+                    }
+                    continue
 
                 for entry in entries:
                     sim = run_profit_simulation(

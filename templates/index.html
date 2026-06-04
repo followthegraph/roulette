@@ -1648,7 +1648,11 @@ async function fetchProfitCompare() {
 }
 
 function getWindowMetric(row, windowName, metric) {
-  return row?.results_by_window?.[windowName]?.[metric] ?? "—";
+  const win = row?.results_by_window?.[windowName];
+
+  if (!win || win.unavailable) return "—";
+
+  return win?.[metric] ?? "—";
 }
 
 function formatMoneyish(value) {
