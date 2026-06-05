@@ -1856,28 +1856,18 @@ def strategy_profile():
             "strategy": strategy
         }), 404
 
-    limit_clause = ""
-    params = [wheel_id]
+    rows = get_global_rolls_for_stats(wheel_id, window)
 
-    if window != "all":
-        try:
-            limit = max(1, int(window))
-            limit_clause = "LIMIT ?"
-            params.append(limit)
-        except Exception:
-            limit = 500
-            limit_clause = "LIMIT ?"
-            params.append(limit)
+    if not rows:
+        return jsonify({
+            "ok": False,
+            "error": f"Window {window} is not available for the latest cohort yet.",
+            "wheel_id": wheel_id,
+            "strategy": strategy,
+            "window": window
+        }), 409
 
-    rows = global_db_rows(f"""
-        SELECT number, seq, created_at_utc
-        FROM wheel_rolls
-        WHERE wheel_id = ?
-        ORDER BY seq DESC
-        {limit_clause}
-    """, tuple(params))
-
-    rolls = list(reversed(rows))  # oldest -> newest
+    rolls = list(reversed(rows))
 
     hit_indices = [
         idx for idx, row in enumerate(rolls)
