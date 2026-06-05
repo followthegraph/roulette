@@ -448,22 +448,31 @@ def get_latest_valid_cohort(wheel_id):
 def get_global_rolls_for_stats(wheel_id, window="500"):
     window = str(window).lower()
 
-    if window == "all":
-        cohort = get_latest_valid_cohort(wheel_id)
+    if str(window).lower() == "all":
+        cohort_rows = global_db_rows("""
+            SELECT *
+            FROM wheel_roll_cohorts
+            WHERE wheel_id = ?
+            AND is_valid = 1
+            ORDER BY cohort_id DESC
+            LIMIT 1
+        """, (wheel_id,))
 
-        if not cohort:
+        if not cohort_rows:
             return []
+
+        cohort = cohort_rows[0]
 
         rows = global_db_rows("""
             SELECT number, color, seq, created_at_utc
             FROM wheel_rolls
             WHERE wheel_id = ?
-              AND seq BETWEEN ? AND ?
+            AND seq BETWEEN ? AND ?
             ORDER BY seq DESC
         """, (
             wheel_id,
             cohort["start_seq"],
-            cohort["end_seq"]
+            cohort["end_seq"],
         ))
 
         return [
@@ -473,6 +482,9 @@ def get_global_rolls_for_stats(wheel_id, window="500"):
                 "seq": r.get("seq"),
                 "created_at_utc": r.get("created_at_utc"),
                 "cohort_id": cohort["cohort_id"],
+                "cohort_start_seq": cohort["start_seq"],
+                "cohort_end_seq": cohort["end_seq"],
+                "cohort_roll_count": cohort["roll_count"],
                 "cohort_valid": cohort["is_valid"],
             }
             for r in rows
@@ -1639,35 +1651,17 @@ def profit_compare():
         }), 500
 
 def get_window_elapsed_hours(wheel_id, window):
-    params = [wheel_id]
-    limit_clause = ""
-
-    if str(window).lower() != "all":
-        try:
-            limit = max(1, int(window))
-        except Exception:
-            limit = 500
-
-        limit_clause = "LIMIT ?"
-        params.append(limit)
-
-    rows = global_db_rows(f"""
-        SELECT created_at_utc
-        FROM wheel_rolls
-        WHERE wheel_id = ?
-        ORDER BY seq DESC
-        {limit_clause}
-    """, tuple(params))
+    rows = get_global_rolls_for_stats(wheel_id, window)
 
     if len(rows) < 2:
         return None
 
     try:
-        start_raw = rows[-1]["created_at_utc"].replace("Z", "+00:00")
-        end_raw = rows[0]["created_at_utc"].replace("Z", "+00:00")
+        newest = rows[0]["created_at_utc"].replace("Z", "+00:00")
+        oldest = rows[-1]["created_at_utc"].replace("Z", "+00:00")
 
-        start = datetime.fromisoformat(start_raw)
-        end = datetime.fromisoformat(end_raw)
+        start = datetime.fromisoformat(oldest)
+        end = datetime.fromisoformat(newest)
 
         hours = (end - start).total_seconds() / 3600
         return round(hours, 4) if hours > 0 else None
