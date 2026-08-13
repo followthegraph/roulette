@@ -33,6 +33,7 @@ CONFIG_PATH = ROOT_DIR / "config" / "config.local.json"
 ENV_PATH = ROOT_DIR / ".env"
 GLOBAL_DB_PATH = ROOT_DIR / "global" / "global_rolls.sqlite"
 URGENCY_SNAPSHOT_JSON = DATA_DIR / "urgency_snapshot.json"
+HTTP_SESSION = requests.Session()
 
 load_dotenv(ENV_PATH, override=True)
 
@@ -135,7 +136,7 @@ def sync_to_global_collector(rolls):
             "rolls": rolls
         }
 
-        response = requests.post(
+        response = HTTP_SESSION.post(
             GLOBAL_INGEST_URL,
             json=payload,
             timeout=5
@@ -2240,7 +2241,7 @@ def global_urgency_snapshots():
 
     for wheel_id, base_url in hosts.items():
         try:
-            r = requests.get(f"{base_url}/urgency-snapshot", timeout=4)
+            r = HTTP_SESSION.get(f"{base_url}/urgency-snapshot", timeout=4)
             results[wheel_id] = r.json()
         except Exception as e:
             results[wheel_id] = {
