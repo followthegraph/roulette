@@ -941,3 +941,31 @@
   .profit-compare-table tr:nth-child(even) {
     background: #f9fafb;
   }
+.neighbors-opportunities { width: auto%; }
+.neighbors-opportunities th, .neighbors-opportunities td { white-space: nowrap; }
+.neighbors-drought-link { background: none; border: 0; padding: 0; color: #0645ad; text-decoration: underline; cursor: pointer; font: inherit; }
+.raw-value { color: #111; font-weight: normal; }
+
+.neighbors-table-container {
+  flex: 1 1 400px;
+  min-width: 350px;
+  max-width: 100%;
+}
+.neighbors-table-container #neighborsLocator { padding: 0 !important; border: 0 !important; }
+.neighbors-inspector { margin: 8px 0 20px; }
+.neighbors-inspector summary { cursor: pointer; font-weight: bold; }
+.neighbors-inspector-content { margin-top: 12px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; overflow-x: auto; }
+
+@media (max-width: 1100px) {
+  #globalHealthBanner, #heatmap, #streetStickyWrap, .best-opportunities-panel {
+    position: static !important;
+    top: auto !important;
+    z-index: auto !important;
+  }
+  body.scrolled #heatmap { max-height: none !important; overflow: visible; }
+  #urgencyOverlay { position: static; width: auto; max-width: 100%; margin-bottom: 12px; }
+  .dashboard, .table-wrapper { min-width: 0; width: 100%; }
+  .table-wrapper > .table-container { min-width: 0; flex: 1 1 100%; overflow-x: auto; }
+  .best-opportunities-header { flex-wrap: wrap; }
+  .best-opportunities-grid { grid-template-columns: minmax(0, 1fr); }
+}

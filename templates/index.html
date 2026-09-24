@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ server_name }}</title>
     <link rel="stylesheet"
       href="{{ url_for('static', filename='dashboard.css') }}">
@@ -160,76 +161,6 @@
   <div id="justHitTicket"
       style="padding: 6px; background: #1a1a1a; color: white; font-size: 13px; border-radius: 4px; margin-bottom: 20px;"></div>
    -->
-    <div id="neighborsPanel"
-      style="margin: 0 0 20px 0; padding: 16px; border: 1px solid #ccc; border-radius: 10px; background: #fafafa; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
-      <h3 style="margin-top: 0;">Neighbors: <span id="neighborsPanelTitle">0 ±
-          1</span></h3>
-      <div
-        style="display: flex; flex-wrap: wrap; gap: 16px; align-items: end; margin-bottom: 12px;">
-        <div>
-          <label for="neighborsCenterSelect"><b>Center Number</b></label><br>
-          <select id="neighborsCenterSelect"></select>
-        </div>
-        <div>
-          <label for="neighborsCountSelect"><b>Neighbors</b></label><br>
-          <select id="neighborsCountSelect"></select>
-        </div>
-        <div>
-          <label for="neighborsHeatRollCount"><b>Heat Window</b></label><br>
-          <input id="neighborsHeatRollCount" type="text" inputmode="numeric"
-            value="50" style="width: 90px;">
-        </div>
-        <div>
-          <label for="neighborsHeatModeSelect"><b>Heat Style</b></label><br>
-          <select id="neighborsHeatModeSelect">
-            <option value="neutral" selected>Flame / Ice + Red/Black
-              Ring</option>
-            <option value="roulette">Roulette-Tinted</option>
-          </select>
-        </div>
-        <div id="neighborsExactMatch"
-          style="font-weight: bold; padding: 6px 10px; border-radius: 6px; background: #eee;">Exact
-          Match: None</div>
-      </div>
-      <div id="neighborsLocator"
-        style="margin-bottom: 12px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff;">
-        <div id="neighborsLocatorHeader"
-          style="font-weight: bold; margin-bottom: 8px;">Top Current Neighbors
-          Droughts (±1)</div>
-        <div id="neighborsTopDroughts">—</div>
-        <button type="button" id="neighborsShowAllToggle"
-          style="margin-top: 8px; display: none;">Show All</button>
-      </div>
-      <div id="neighborsRacetrack"
-        style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;"></div>
-      <div id="neighborsHeatLegend"
-        style="margin-bottom: 12px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff;">
-        <div id="neighborsHeatLegendHeader"
-          style="font-weight: bold; margin-bottom: 8px;">Racetrack Heat Legend
-          (last 50 rolls)</div>
-        <div id="neighborsHeatLegendScale"
-          style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
-      </div>
-      <div style="margin-bottom: 8px;"><b>Wheel Order:</b> <span
-          id="neighborsWheelOrder"></span></div>
-      <div style="margin-bottom: 14px;"><b>Ascending:</b> <span
-          id="neighborsAscending"></span></div>
-      <table style="width: 100%;">
-        <thead>
-          <tr>
-            <th>Betting Strategy</th>
-            <th>Rolls Since Last Hit</th>
-            <th>Avg Delay</th>
-            <th>Max Delay</th>
-            <th>Bet Signal</th>
-            <th>Martingale Risk</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr id="neighborsStatsRow"></tr>
-        </tbody>
-      </table>
-    </div>
 
     <div
       style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px;"></div>
@@ -249,14 +180,14 @@
       <!-- #streetStatsLabel will be added here dynamically -->
     </div>
 
-    <div id="bestOpportunitiesPanel" class="best-opportunities-panel">
+    <div id="bestOpportunitiesPanel" class="best-opportunities-panel collapsed">
       <div class="best-opportunities-header">
         <div>
           <h2>Best Opportunities</h2>
           <div id="bestOpportunitiesSubtitle"></div>
         </div>
         <div style="display:flex; gap:8px;">
-          <button type="button" id="toggleBestOpportunitiesBtn">Collapse</button>
+          <button type="button" id="toggleBestOpportunitiesBtn" aria-expanded="false">Expand</button>
           <button type="button" id="refreshBestOpportunitiesBtn">Refresh</button>
         </div>
       </div>
@@ -384,6 +315,81 @@
             </thead>
             <tbody></tbody>
           </table>
+        </div>
+
+        <div id="neighborsPanel" class="table-container neighbors-table-container">
+          <h3>Neighbors</h3>
+      <div id="neighborsLocator"
+        style="margin-bottom: 12px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff;">
+        <div id="neighborsLocatorHeader"
+          style="font-weight: bold; margin-bottom: 8px;">Top Neighbors Opportunities</div>
+        <div style="font-size: 12px; margin-bottom: 8px;">Ranked by Bet Signal score. Average and maximum delay use the selected Stats Window. Blue values use the count after excluding zeros and consecutive repeats; black values in parentheses are raw.</div>
+        <div id="neighborsTopDroughts">—</div>
+        <button type="button" id="neighborsShowAllToggle"
+          style="margin-top: 8px; display: none;">Show All</button>
+      </div>
+          <details id="neighborsInspector" class="neighbors-inspector">
+            <summary>Wheel view and custom selection</summary>
+            <div class="neighbors-inspector-content">
+              <h4>Neighbors: <span id="neighborsPanelTitle">0 ± 1</span></h4>
+      <div
+        style="display: flex; flex-wrap: wrap; gap: 16px; align-items: end; margin-bottom: 12px;">
+        <div>
+          <label for="neighborsCenterSelect"><b>Center Number</b></label><br>
+          <select id="neighborsCenterSelect"></select>
+        </div>
+        <div>
+          <label for="neighborsCountSelect"><b>Neighbors</b></label><br>
+          <select id="neighborsCountSelect"></select>
+        </div>
+        <div>
+          <label for="neighborsHeatRollCount"><b>Heat Window</b></label><br>
+          <input id="neighborsHeatRollCount" type="text" inputmode="numeric"
+            value="50" style="width: 90px;">
+        </div>
+        <div>
+          <label for="neighborsHeatModeSelect"><b>Heat Style</b></label><br>
+          <select id="neighborsHeatModeSelect">
+            <option value="neutral" selected>Flame / Ice + Red/Black
+              Ring</option>
+            <option value="roulette">Roulette-Tinted</option>
+          </select>
+        </div>
+        <div id="neighborsExactMatch"
+          style="font-weight: bold; padding: 6px 10px; border-radius: 6px; background: #eee;">Exact
+          Match: None</div>
+      </div>
+      <div id="neighborsRacetrack"
+        style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;"></div>
+      <div id="neighborsHeatLegend"
+        style="margin-bottom: 12px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff;">
+        <div id="neighborsHeatLegendHeader"
+          style="font-weight: bold; margin-bottom: 8px;">Racetrack Heat Legend
+          (last 50 rolls)</div>
+        <div id="neighborsHeatLegendScale"
+          style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
+      </div>
+      <div style="margin-bottom: 8px;"><b>Wheel Order:</b> <span
+          id="neighborsWheelOrder"></span></div>
+      <div style="margin-bottom: 14px;"><b>Ascending:</b> <span
+          id="neighborsAscending"></span></div>
+      <table style="width: 100%;">
+        <thead>
+          <tr>
+            <th>Betting Strategy</th>
+            <th>Rolls Since Last Hit</th>
+            <th>Avg Delay</th>
+            <th>Max Delay</th>
+            <th>Bet Signal</th>
+            <th>Martingale Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr id="neighborsStatsRow"></tr>
+        </tbody>
+      </table>
+            </div>
+          </details>
         </div>
 
         <div class="table-container">
@@ -986,96 +992,89 @@ function getUrgencyThreshold() {
   return sanitizeUrgencyThreshold(input ? input.value : 2000, 2000);
 }
 
+function neighborScoreRow(stats) {
+  return {
+    'Rolls Since Last Hit': stats.rollsSince,
+    'Adjusted Rolls Since Last Hit': stats.adjustedRollsSince,
+    'Avg Delay': stats.avgDelay,
+    'Max Delay': stats.maxDelay,
+    'P90 Delay': stats.p90,
+    'P95 Delay': stats.p95,
+    'P99 Delay': stats.p99,
+    'Current Percentile': stats.currentPercentile,
+    'Martingale Risk': stats.rawRisk,
+    'Adjusted Martingale Risk': stats.martingaleRisk,
+  };
+}
+
+function neighborDelayHtml(stats) {
+  if (stats.rollsSince === '') return '—';
+  return stats.adjustedRollsSince !== stats.rollsSince
+    ? `<span class="adjusted-value">${stats.adjustedRollsSince}</span> <span class="raw-value">(${stats.rollsSince} raw)</span>`
+    : String(stats.rollsSince);
+}
+
+function neighborRiskHtml(stats) {
+  if (stats.maxDelay !== '' && stats.adjustedRollsSince >= stats.maxDelay) return 'At/beyond max delay';
+  if (!stats.martingaleRisk && !stats.rawRisk) return '—';
+  return stats.martingaleRisk && stats.rawRisk && stats.adjustedRollsSince !== stats.rollsSince
+    ? `<span class="adjusted-value">${stats.martingaleRisk}</span> <span class="raw-value">(${stats.rawRisk} raw)</span>`
+    : (stats.martingaleRisk || stats.rawRisk);
+}
+
+function neighborSignalHtml(scoreInfo) {
+  return scoreInfo.score === null ? 'Unknown'
+    : `<span class="decision-score ${scoreInfo.className}">${scoreInfo.score}</span><span class="decision-label">${scoreInfo.label}</span>`;
+}
+
+function neighborRiskClass(stats) {
+  if (stats.maxDelay !== '' && stats.adjustedRollsSince >= stats.maxDelay) return 'risk-unknown';
+  const risk = parseMoneyValue(stats.martingaleRisk || stats.rawRisk);
+  const threshold = getRiskThreshold();
+  if (risk === null || !Number.isFinite(risk)) return 'risk-unknown';
+  if (!Number.isFinite(threshold) || threshold <= 0) return 'risk-ok';
+  if (risk >= threshold) return 'risk-over';
+  return risk >= threshold * .75 ? 'risk-near' : 'risk-ok';
+}
+
 function updateNeighborsTopDroughts(rolls) {
   const container = document.getElementById('neighborsTopDroughts');
   const header = document.getElementById('neighborsLocatorHeader');
   const toggleBtn = document.getElementById('neighborsShowAllToggle');
-  const countSelect = document.getElementById('neighborsCountSelect');
-  if (!container || !header || !toggleBtn || !countSelect) return;
-
-  const neighborCount = Math.max(0, Number(countSelect.value || 1));
-  header.textContent = `Top Current Neighbors Droughts (±${neighborCount})`;
-
-  const parsedRolls = (Array.isArray(rolls) ? rolls : [])
-    .map(entry => Number(entry?.number))
-    .filter(num => Number.isInteger(num) && num >= 0 && num <= 36);
-
-  if (!parsedRolls.length || neighborCount < 1) {
-    container.textContent = neighborCount < 1
-      ? 'Select at least 1 neighbor to view top current droughts.'
-      : '—';
+  if (!container || !header || !toggleBtn) return;
+  header.textContent = `Top Neighbors Opportunities (${getStatsWindowLabel()})`;
+  if (!Array.isArray(rolls) || !rolls.length) {
+    container.textContent = 'No rolls available for this window.';
     toggleBtn.style.display = 'none';
-    toggleBtn.textContent = 'Show All';
     return;
   }
-
-  const deduped = new Map();
-  for (const centerNumber of wheelOrder) {
-    const numbers = getNeighborsNumbers(centerNumber, neighborCount);
-    const key = [...numbers].sort((a, b) => a - b).join(',');
-    if (deduped.has(key)) continue;
-    const stats = computeNeighborsStats(rolls, numbers, `${centerNumber} ± ${neighborCount}`);
-    const rollsSince = Number(stats.rollsSince);
-    if (!Number.isFinite(rollsSince)) continue;
-    deduped.set(key, {
-      centerNumber,
-      neighborCount,
-      numbers,
-      rollsSince,
-    });
-  }
-
-  const entries = [...deduped.values()].sort((a, b) =>
-    (b.rollsSince - a.rollsSince) ||
-    (a.neighborCount - b.neighborCount) ||
-    (wheelOrder.indexOf(a.centerNumber) - wheelOrder.indexOf(b.centerNumber))
-  );
-
-  if (!entries.length) {
-    container.textContent = '—';
-    toggleBtn.style.display = 'none';
-    toggleBtn.textContent = 'Show All';
-    return;
-  }
-
-  const expanded = toggleBtn.dataset.expanded === 'true';
-  const baseLimit = Math.min(10, entries.length);
-  let cutoffIndex = baseLimit;
-  if (baseLimit > 0 && baseLimit < entries.length) {
-    const cutoffRolls = entries[baseLimit - 1].rollsSince;
-    while (cutoffIndex < entries.length && entries[cutoffIndex].rollsSince === cutoffRolls) {
-      cutoffIndex += 1;
+  const entries = [];
+  for (let count = 1; count <= 9; count++) {
+    for (const center of wheelOrder) {
+      const stats = computeNeighborsStats(rolls, getNeighborsNumbers(center, count), `${center} ± ${count}`);
+      if (stats.rollsSince === '') continue;
+      const scoreInfo = scoreStrategyRow(neighborScoreRow(stats));
+      entries.push({ center, count, stats, scoreInfo });
     }
   }
-  const visible = expanded ? entries : entries.slice(0, cutoffIndex);
-
-  container.innerHTML = `<ol style="margin: 0; padding-left: 18px;">${visible.map(entry =>
-    `<li><button type="button" class="neighbors-drought-link" data-center="${entry.centerNumber}" data-count="${entry.neighborCount}" style="background: none; border: none; padding: 0; margin: 0; color: #0645ad; text-decoration: underline; cursor: pointer; font: inherit;">${entry.centerNumber} ± ${entry.neighborCount}</button> (Rolls Since Last Hit: ${entry.rollsSince})</li>`
-  ).join('')}</ol>`;
-
-  if (entries.length > cutoffIndex) {
-    toggleBtn.style.display = 'inline-block';
-    toggleBtn.textContent = expanded ? 'Show Top 10' : 'Show All';
-  } else {
-    toggleBtn.style.display = 'none';
-    toggleBtn.textContent = 'Show All';
-  }
-
+  entries.sort((a, b) => (b.scoreInfo.score ?? -1) - (a.scoreInfo.score ?? -1)
+    || b.stats.adjustedRollsSince - a.stats.adjustedRollsSince
+    || a.count - b.count
+    || wheelOrder.indexOf(a.center) - wheelOrder.indexOf(b.center));
+  const expanded = toggleBtn.dataset.expanded === 'true';
+  const visible = expanded ? entries : entries.slice(0, 10);
+  container.innerHTML = `<div style="overflow-x:auto"><table class="neighbors-opportunities"><thead><tr><th>Betting Strategy</th><th>Rolls Since Last Hit</th><th>Avg Delay</th><th>Max Delay</th><th>Bet Signal</th><th>Martingale Risk</th></tr></thead><tbody>${visible.map(entry => `<tr><td><button type="button" class="neighbors-drought-link" data-center="${entry.center}" data-count="${entry.count}">${entry.center} ± ${entry.count}</button> <small>(${entry.count * 2 + 1} numbers)</small></td><td>${neighborDelayHtml(entry.stats)}</td><td>${entry.stats.avgDelay === '' ? '—' : entry.stats.avgDelay}</td><td>${entry.stats.maxDelay === '' ? '—' : entry.stats.maxDelay}</td><td>${neighborSignalHtml(entry.scoreInfo)}</td><td class="${neighborRiskClass(entry.stats)}"><span class="progression-badge progression-double">2x</span>${neighborRiskHtml(entry.stats)}</td></tr>`).join('')}</tbody></table></div>`;
+  toggleBtn.style.display = entries.length > 10 ? 'inline-block' : 'none';
+  toggleBtn.textContent = expanded ? 'Show Top 10' : `Show All ${entries.length}`;
   toggleBtn.onclick = () => {
     toggleBtn.dataset.expanded = expanded ? 'false' : 'true';
-    updateNeighborsTopDroughts(window.latestRolls || []);
+    updateNeighborsTopDroughts(window.neighborsWindowRolls || []);
   };
-
-  container.querySelectorAll('.neighbors-drought-link').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const centerSelect = document.getElementById('neighborsCenterSelect');
-      const countSelectInner = document.getElementById('neighborsCountSelect');
-      if (!centerSelect || !countSelectInner) return;
-      centerSelect.value = String(btn.dataset.center);
-      countSelectInner.value = String(btn.dataset.count);
-      updateNeighborsPanel(window.latestRolls || []);
-    });
-  });
+  container.querySelectorAll('.neighbors-drought-link').forEach(btn => btn.addEventListener('click', () => {
+    document.getElementById('neighborsCenterSelect').value = btn.dataset.center;
+    document.getElementById('neighborsCountSelect').value = btn.dataset.count;
+    updateNeighborsPanel(window.latestRolls || []);
+  }));
 }
 
 function buildUrgencySnapshot(candidates) {
@@ -1107,11 +1106,15 @@ function buildUrgencySnapshot(candidates) {
 
     function getCurrentWheelId() {
         const host = window.location.hostname;
+        if (host === "localhost" || host === "127.0.0.1" || host === "::1") return "local-dev";
         if (host.includes("flash")) return "flash-wheel";
         if (host.includes("classic")) return "classic-wheel";
         if (host.includes("eu")) return "eu-wheel";
         return null;
       }
+    function getStatsApiBase() {
+      return getCurrentWheelId() === "local-dev" ? "" : "https://eu.getdatbp.com";
+    }
       function renderHitFrequency(data) {
         const container = document.getElementById("heatmap");
 
@@ -1242,12 +1245,16 @@ function buildUrgencySnapshot(candidates) {
       "Ninth Street", "Tenth Street", "Eleventh Street", "Twelfth Street"
     ];
 
-    const stripParentheses = name => name.split("(")[0].trim();
+    const stripParentheses = name => String(name ?? '').split("(")[0].trim();
 
     const streetData = data.filter(row => {
       const baseName = stripParentheses(row["Betting Strategy"]?.replace(/^'/, ""));
       return streetOrder.includes(baseName) && row["BetType"] === "General";
     });
+    if (!streetData.length) {
+      document.getElementById("streetTicker").textContent = "Top Streets: No local stats available.";
+      return;
+    }
 
     streetData.sort((a, b) =>
       parseFloat(b["Rolls Since Last Hit"]) - parseFloat(a["Rolls Since Last Hit"])
@@ -1373,7 +1380,7 @@ function buildUrgencySnapshot(candidates) {
         const firstNum = match ? match[1].split(",")[0].trim() : "?";
 
         const div = document.createElement("div");
-        div.textContent = `${name.replace(" Street", "")} (${firstNum})`;
+        div.textContent = `${String(name ?? '').replace(" Street", "")} (${firstNum})`;
         div.style.backgroundColor = color;
         div.style.color = "white";
         div.style.padding = "6px 8px";
@@ -1501,7 +1508,7 @@ function buildUrgencySnapshot(candidates) {
   const heatMode = (heatModeSelect && ['neutral', 'roulette'].includes(heatModeSelect.value)) ? heatModeSelect.value : 'neutral';
   const numbers = getNeighborsNumbers(centerNumber, neighborCount);
   const strategyLabel = `Neighbors: ${centerNumber} ± ${neighborCount}`;
-  const stats = computeNeighborsStats(rolls, numbers, strategyLabel);
+  const stats = computeNeighborsStats(window.neighborsWindowRolls || [], numbers, strategyLabel);
   const ascending = [...numbers].sort((a, b) => a - b);
 
   const exactMatch = frenchBetNames.find(name => sameNumberSet(numbers, generalBets[name] || [])) || '';
@@ -1522,27 +1529,18 @@ function buildUrgencySnapshot(candidates) {
   const heatInfo = getNeighborsHeatCounts(rolls, heatWindow);
   renderNeighborsHeatLegend(heatInfo.maxCount, heatInfo.usedWindow, heatMode);
   renderNeighborsRacetrack(numbers, centerNumber, heatInfo.counts, heatInfo.usedWindow, heatInfo.maxCount, heatMode, urgencyHighlightState.numbers);
-  updateNeighborsTopDroughts(rolls);
+  updateNeighborsTopDroughts(window.neighborsWindowRolls || []);
 
   const row = document.getElementById('neighborsStatsRow');
   if (!row) return;
   row.innerHTML = '';
-
-  const cells = [
-    stats.strategy,
-    stats.rollsSince,
-    stats.avgDelay,
-    stats.maxDelay,
-    stats.betSignal,
-    stats.martingaleRisk,
-  ];
-
-  cells.forEach((value, index) => {
-    const td = document.createElement('td');
-    td.textContent = value === undefined || value === null ? '' : String(value);
-    if (index === 4 && value === '? Consider betting') td.classList.add('highlight');
-    row.appendChild(td);
-  });
+  const scoreInfo = scoreStrategyRow(neighborScoreRow(stats));
+  row.innerHTML = `<td>${centerNumber} ± ${neighborCount} (${numbers.length} numbers)</td>
+    <td>${neighborDelayHtml(stats)}</td>
+    <td>${stats.avgDelay === '' ? '—' : stats.avgDelay}</td>
+    <td>${stats.maxDelay === '' ? '—' : stats.maxDelay}</td>
+    <td>${neighborSignalHtml(scoreInfo)}</td>
+    <td class="${neighborRiskClass(stats)}"><span class="progression-badge progression-double">2x</span>${neighborRiskHtml(stats)}</td>`;
 }
 
 async function fetchProfitRank() {
@@ -1905,7 +1903,7 @@ async function getOpportunityBacktest(strategy) {
   const maxWaitLimit = document.getElementById("backtestMaxWaitLimit")?.value || "";
 
   const url =
-    `https://eu.getdatbp.com/backtest-entry.json` +
+    `${getStatsApiBase()}/backtest-entry.json` +
     `?wheel_id=${encodeURIComponent(wheelId)}` +
     `&strategy=${encodeURIComponent(strategy)}` +
     `&window=${encodeURIComponent(windowSize)}` +
@@ -2500,16 +2498,31 @@ function computeNeighborsStats(rolls, numbers, strategyLabel) {
 
   const lastHitIndex = hitIndices.length ? hitIndices[hitIndices.length - 1] : null;
   const rollsSince = lastHitIndex === null ? '' : (chronological.length - 1 - lastHitIndex);
+  const sinceNumbers = lastHitIndex === null ? [] : chronological.slice(lastHitIndex + 1);
+  const zeroCount = sinceNumbers.filter(num => num === 0).length;
+  const repeatCount = sinceNumbers.slice(1).filter((num, idx) => num !== 0 && num === sinceNumbers[idx]).length;
+  const adjustedRollsSince = rollsSince === '' ? '' : Math.max(0, rollsSince - zeroCount - repeatCount);
   const delays = [];
   for (let i = 1; i < hitIndices.length; i++) {
     delays.push(hitIndices[i] - hitIndices[i - 1]);
   }
   const avgDelay = delays.length ? Number((delays.reduce((sum, v) => sum + v, 0) / delays.length).toFixed(2)) : '';
   const maxDelay = delays.length ? Math.max(...delays) : '';
+  const sortedDelays = [...delays].sort((a, b) => a - b);
+  const percentile = p => {
+    if (!sortedDelays.length) return '';
+    const pos = (sortedDelays.length - 1) * p;
+    const low = Math.floor(pos);
+    const high = Math.ceil(pos);
+    return Number((sortedDelays[low] + (sortedDelays[high] - sortedDelays[low]) * (pos - low)).toFixed(2));
+  };
+  const currentPercentile = delays.length
+    ? Number((100 * delays.filter(delay => delay <= adjustedRollsSince).length / delays.length).toFixed(2)) : '';
   const betSignal = (rollsSince !== '' && avgDelay !== '') ? (rollsSince >= avgDelay ? '? Consider betting' : '? Wait') : '';
 
+  const rawRisk = calculateDynamicMartingaleRisk(rollsSince, maxDelay, numbers.length);
   const martingaleRisk = calculateDynamicMartingaleRisk(
-    rollsSince,
+    adjustedRollsSince,
     maxDelay,
     numbers.length
   );
@@ -2517,9 +2530,15 @@ function computeNeighborsStats(rolls, numbers, strategyLabel) {
   return {
     strategy: strategyLabel,
     rollsSince,
+    adjustedRollsSince,
     avgDelay,
     maxDelay,
+    p90: percentile(.90),
+    p95: percentile(.95),
+    p99: percentile(.99),
+    currentPercentile,
     betSignal,
+    rawRisk,
     martingaleRisk,
   };
 }
@@ -2541,10 +2560,12 @@ function sameNumberSet(a, b) {
       const statsWindow = document.getElementById("statsWindowSelect")?.value || "500";
 
       const stats = await fetch(
-        `https://eu.getdatbp.com/stats-window.json?wheel_id=${encodeURIComponent(wheelId)}&window=${encodeURIComponent(statsWindow)}&t=${timestamp}`
+        `${getStatsApiBase()}/stats-window.json?wheel_id=${encodeURIComponent(wheelId)}&window=${encodeURIComponent(statsWindow)}&t=${timestamp}`
       ).then(res => res.json());
 
       allData = stats;
+      const neighborsResponse = await fetch(`${getStatsApiBase()}/neighbors-rolls.json?wheel_id=${encodeURIComponent(wheelId)}&window=${encodeURIComponent(statsWindow)}&t=${timestamp}`);
+      window.neighborsWindowRolls = neighborsResponse.ok ? await neighborsResponse.json() : [];
 
       const rolls = await fetch(`/roulette_data.json?t=${timestamp}`).then(r => r.json());
       window.latestRolls = rolls;
@@ -2765,8 +2786,8 @@ setTimeout(() => {
             const adjusted = Number(row["Adjusted Rolls Since Last Hit"]);
 
             if (Number.isFinite(raw) && Number.isFinite(adjusted) && adjusted !== raw) {
-              td.innerHTML = `${raw} <span class="adjusted-value">(${adjusted})</span>`;
-              td.title = `Raw: ${raw} | Adjusted: ${adjusted} | Adjustment Applied: ${raw - adjusted}`;
+              td.innerHTML = `<span class="adjusted-value">${adjusted}</span> <span class="raw-value">(${raw} raw)</span>`;
+              td.title = `Raw spins: ${raw} | Adjusted for zeros and consecutive repeats: ${adjusted}`;
             } else {
               td.textContent = Number.isFinite(raw) ? raw : "";
             }
@@ -2854,11 +2875,14 @@ setTimeout(() => {
             const riskDisplay =
               Number.isFinite(adjustedRiskNum) &&
               Number.isFinite(rawRiskNum) &&
-              adjustedRiskNum !== rawRiskNum
-                ? `${adjustedRisk} <span class="adjusted-value">(${rawRisk} raw)</span>`
+              adjustedRollsSince !== rawRollsSince
+                ? `<span class="adjusted-value">${adjustedRisk}</span> <span class="raw-value">(${rawRisk} raw)</span>`
                 : (adjustedRisk || rawRisk || "");
                 
         riskSpan.innerHTML = riskDisplay || "";
+        if (Number.isFinite(adjustedRollsSince) && adjustedRollsSince !== rawRollsSince) {
+          mrTd.title = `Adjusted risk uses ${adjustedRollsSince} adjusted spins (raw: ${rawRollsSince}).`;
+        }
 
         const progressionBadge = document.createElement("span");
         progressionBadge.className = `progression-badge progression-${String(progression).toLowerCase()}`;
@@ -3631,7 +3655,7 @@ async function fetchStrategyProfile(strategy, windowSize = "500") {
   const wheelId = getCurrentWheelId();
 
   const url =
-    `https://eu.getdatbp.com/strategy-profile` +
+    `${getStatsApiBase()}/strategy-profile` +
     `?wheel_id=${encodeURIComponent(wheelId)}` +
     `&strategy=${encodeURIComponent(strategy)}` +
     `&window=${encodeURIComponent(windowSize)}`;
@@ -3773,7 +3797,7 @@ function scoreStrategyRow(row) {
   let riskComponent = 0;
   let riskText = "Risk unknown/blank: +0";
 
-  if (Number.isFinite(risk)) {
+  if (risk !== null && Number.isFinite(risk) && risk > 0) {
     if (risk > 1500) {
       riskComponent = 0;
       riskText = `Risk $${risk.toLocaleString()} > $1,500: +0`;
@@ -3787,6 +3811,7 @@ function scoreStrategyRow(row) {
       riskComponent = 15;
       riskText = `Risk $${risk.toLocaleString()} > $250: +15`;
     } else {
+      riskComponent = 20;
       riskText = `Risk $${risk.toLocaleString()} <= $250: +20`;
     }
   }
@@ -3860,39 +3885,21 @@ function attachStrategyProfileHandlers() {
     signalCell.dataset.profileBound = "1";
     signalCell.style.cursor = "help";
 
-    signalCell.addEventListener("mouseenter", async (e) => {
-      if (window.innerWidth < 900) return;
-
-      const strategy = strategyCell.textContent.trim();
-      const preview = document.getElementById("strategyProfilePreview");
-
-      try {
-        const profile = await fetchStrategyProfile(strategy, "500");
-        if (!profile.ok) {
-          preview.innerHTML = `<b>${strategy}</b><br>No profile data found.`;
-        } else {
-          preview.innerHTML = renderProfilePreview(
-            profile,
-            signalCell.dataset.scoreBreakdown || ""
-          );
-        }
-
-        preview.style.left = `${Math.min(window.innerWidth - 440, e.clientX + 14)}px`;
-        preview.style.top = `${Math.min(window.innerHeight - 180, e.clientY + 14)}px`;
-        preview.style.display = "block";
-      } catch (err) {
-        preview.innerHTML = `<b>${strategy}</b><br>Profile request failed.`;
-        preview.style.display = "block";
-      }
-    });
-    
-    signalCell.addEventListener("mouseleave", () => {
-      document.getElementById("strategyProfilePreview").style.display = "none";
-    });
-
-    signalCell.addEventListener("click", async () => {
+    signalCell.tabIndex = 0;
+    signalCell.setAttribute('role', 'button');
+    signalCell.setAttribute('aria-label', `Open details for ${strategyCell.textContent.trim()}`);
+    signalCell.style.cursor = 'pointer';
+    const openDetails = async () => {
+      document.getElementById('strategyProfilePreview').style.display = 'none';
       activeProfileStrategy = strategyCell.textContent.trim();
       await openStrategyProfileModal(activeProfileStrategy);
+    };
+    signalCell.addEventListener('click', openDetails);
+    signalCell.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openDetails();
+      }
     });
   });
 }
@@ -3975,7 +3982,7 @@ async function fetchEntryBacktest(strategy) {
   const maxWaitLimit = document.getElementById("backtestMaxWaitLimit")?.value || "";
 
   const url =
-    `https://eu.getdatbp.com/backtest-entry.json` +
+    `${getStatsApiBase()}/backtest-entry.json` +
     `?wheel_id=${encodeURIComponent(wheelId)}` +
     `&strategy=${encodeURIComponent(strategy)}` +
     `&window=${encodeURIComponent(windowSize)}` +
@@ -4108,7 +4115,9 @@ document.getElementById("toggleBestOpportunitiesBtn")?.addEventListener("click",
   if (!panel || !btn) return;
 
   panel.classList.toggle("collapsed");
-  btn.textContent = panel.classList.contains("collapsed") ? "Expand" : "Collapse";
+  const expanded = !panel.classList.contains("collapsed");
+  btn.textContent = expanded ? "Collapse" : "Expand";
+  btn.setAttribute("aria-expanded", String(expanded));
 });
 document.getElementById("profitSimBtn")?.addEventListener("click", () => {
   document.getElementById("profitSimModal")?.classList.remove("hidden");

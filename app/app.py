@@ -449,6 +449,20 @@ def get_latest_valid_cohort(wheel_id):
 def get_global_rolls_for_stats(wheel_id, window="500"):
     window = str(window).lower()
 
+    # Local preview can use the saved rolls when the global cohort database
+    # has not been copied to the development machine.
+    if wheel_id == "local-dev":
+        source = ROULETTE_ALL_JSON if ROULETTE_ALL_JSON.exists() else ROULETTE_JSON
+        rolls = json_read(source) if source.exists() else []
+        if not isinstance(rolls, list):
+            return []
+        if window == "all":
+            return rolls
+        try:
+            return rolls[:max(1, int(window))]
+        except ValueError:
+            return rolls[:500]
+
     if str(window).lower() == "all":
         cohort_rows = global_db_rows("""
             SELECT *
@@ -714,6 +728,12 @@ def get_roulette_data():
     data = json_read(ROULETTE_JSON)
     return jsonify(data)
 
+@app.route("/neighbors-rolls.json")
+def neighbors_rolls():
+    wheel_id = request.args.get("wheel_id") or WHEEL_ID
+    window = request.args.get("window", "500")
+    return jsonify(get_global_rolls_for_stats(wheel_id, window))
+
 @app.route("/stats-window.json")
 def stats_window():
     import tempfile
@@ -745,7 +765,10 @@ def stats_window():
         temp_csv_path = cf.name
 
     try:
-        generate_strategy_stats(temp_json_path, temp_csv_path)
+        generate_strategy_stats(
+            temp_json_path, temp_csv_path,
+            martingale_config_path=str(BASE_DIR / "martingale_config.json"),
+        )
 
         df = pd.read_csv(temp_csv_path).fillna("")
         records = df.to_dict(orient="records")

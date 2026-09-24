@@ -424,13 +424,6 @@ def generate_strategy_stats(
 
     final_stats_df.to_csv(output_csv_path, index=False)
 
-    print("🎯 Strategy Statistics:")
-    print(final_stats_df)
-    print(
-        f"[SUMMARY] Martingale Risk: {calc_success} calculated, "
-        f"{skip_too_far} skipped (distance > 10), {skip_high_risk} skipped (risk > max_risk)"
-    )
-
     return final_stats_df
 
 
