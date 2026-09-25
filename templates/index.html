@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ server_name }}</title>
     <link rel="stylesheet"
-      href="{{ url_for('static', filename='dashboard.css') }}">
+      href="{{ url_for('static', filename='dashboard.css') }}?v=20260925e">
   </head>
   <body>
     <h1>Roulette Strategy Dashboard</h1>
@@ -518,6 +518,11 @@
 
 // One browser-local tracked strategy. No bets are submitted to the casino.
 const TRACK_KEY = 'roulette_single_bet_v1';
+const BANKROLL_KEY = `roulette_bankroll_v1_${getCurrentWheelId()}`;
+let manualBankroll = (() => {
+  try { const raw = localStorage.getItem(BANKROLL_KEY); const value = Number(raw); return raw !== null && Number.isFinite(value) && value >= 0 ? value : null; }
+  catch (_) { return null; }
+})();
 const neighborsSort = { column: 'score', ascending: false };
 let trackedBet = (() => {
   try {
@@ -527,9 +532,29 @@ let trackedBet = (() => {
 })();
 function saveTrackedBet() {
   try { if (trackedBet) localStorage.setItem(TRACK_KEY, JSON.stringify(trackedBet));
-        else localStorage.removeItem(TRACK_KEY); }
+        else localStorage.removeItem(TRACK_KEY);
+        if (manualBankroll !== null) localStorage.setItem(BANKROLL_KEY, String(manualBankroll));
+        else localStorage.removeItem(BANKROLL_KEY); }
   catch (error) { console.warn('Bet tracking storage unavailable:', error); }
   renderTrackedBet();
+}
+function bankrollField() {
+  const balance = trackedBet?.bankrollBase != null ? trackedBet.bankrollBase + trackedBet.total : manualBankroll;
+  return `<label>Current bankroll <input id="trackedBankroll" type="number" min="0" step="0.01"
+    placeholder="Optional" value="${balance === null ? '' : balance.toFixed(2)}" style="width:100px"></label>`;
+}
+function bindBankrollField(panel) {
+  panel.querySelector('#trackedBankroll')?.addEventListener('change', event => {
+    const text = event.target.value.trim();
+    const value = Number(text);
+    if (text && (!Number.isFinite(value) || value < 0 || value > 1e9)) {
+      alert('Enter a valid bankroll amount, or leave the field blank.');
+      renderTrackedBet(); return;
+    }
+    manualBankroll = text ? value : null;
+    if (trackedBet) trackedBet.bankrollBase = manualBankroll === null ? null : manualBankroll - trackedBet.total;
+    saveTrackedBet();
+  });
 }
 function moneyTrack(value) {
   return `${value < 0 ? '-' : '+'}$${Math.abs(value).toFixed(2)}`;
@@ -559,8 +584,9 @@ function flashNeighborScore(stats, count) {
 }
 function trackButton(label, center, width) {
   const name = String(label);
-  const selected = trackedBet && trackedBet.wheel === getCurrentWheelId() && trackedBet.name === name;
-  const occupied = trackedBet && trackedBet.status !== 'finished' && !selected;
+  const same = trackedBet && trackedBet.wheel === getCurrentWheelId() && trackedBet.name === name;
+  const selected = same && trackedBet.status !== 'finished' && trackedBet.status !== 'paused';
+  const occupied = trackedBet && trackedBet.status !== 'finished' && !same;
   const escaped = name.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   return `<label class="track-choice" title="Track this strategy"><input type="checkbox" class="track-strategy" aria-label="Track ${escaped}"
     data-strategy="${escaped}" ${center === undefined ? '' : `data-center="${center}" data-width="${width}"`}
@@ -568,7 +594,13 @@ function trackButton(label, center, width) {
 }
 function startTrackedBet(button) {
   if (trackedBet && trackedBet.status !== 'finished') {
-    alert('Stop the current tracked bet before starting another.'); return;
+    if (trackedBet.name === button.dataset.strategy && trackedBet.status === 'paused') {
+      trackedBet.status = 'active';
+      trackedBet.lastSeenFingerprint = trackFingerprint(window.latestRolls || []);
+      saveTrackedBet();
+      return;
+    }
+    alert('End the current tracked session before choosing another strategy.'); return;
   }
   const rolls = window.latestRolls || [];
   if (rolls.length < 12) { alert('Wait for spin history to load.'); return; }
@@ -579,7 +611,9 @@ function startTrackedBet(button) {
   const flashStraight = neighbors && getCurrentWheelId() === 'flash-wheel';
   trackedBet = { wheel: getCurrentWheelId(), name: button.dataset.strategy, numbers,
     flashStraight, misses: 0, total: 0, rounds: 0, pending: null, status: 'active',
-    baseUnit: 1, lastAmount: null, outcome: '', startedAt: Date.now() };
+    baseUnit: 1, lastAmount: null, totalSpent: 0, spinsSelected: 0,
+    bankrollBase: manualBankroll,
+    lastSeenFingerprint: trackFingerprint(rolls), outcome: '', startedAt: Date.now() };
   saveTrackedBet();
   document.getElementById('betTracker')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -587,33 +621,40 @@ function renderTrackedBet() {
   const panel = document.getElementById('betTracker');
   if (!panel) return;
   document.querySelectorAll('.track-strategy').forEach(input => {
-    const selected = trackedBet && trackedBet.wheel === getCurrentWheelId() && trackedBet.name === input.dataset.strategy;
-    input.checked = !!selected;
-    input.disabled = !!(trackedBet && trackedBet.status !== 'finished' && !selected);
+    const same = trackedBet && trackedBet.wheel === getCurrentWheelId() && trackedBet.name === input.dataset.strategy;
+    input.checked = !!(same && trackedBet.status !== 'finished' && trackedBet.status !== 'paused');
+    input.disabled = !!(trackedBet && trackedBet.status !== 'finished' && !same);
   });
   if (!trackedBet) {
-    panel.innerHTML = '<b>Bet tracker</b> · Select Track in a strategy row to start one bet.';
+    panel.innerHTML = `<b>Bet tracker</b> · Select a strategy to start. ${bankrollField()}`;
+    bindBankrollField(panel);
     return;
   }
   const bet = trackedBet;
   const next = bet.flashStraight ? bet.baseUnit * (2 ** bet.misses) : (bet.lastAmount === null ? 1 : bet.lastAmount * 2);
   const stake = bet.flashStraight ? next * bet.numbers.length : next;
-  const hitNet = bet.flashStraight ? bet.total + next * (30 - bet.numbers.length) : null;
+  const hitNet = bet.flashStraight ? bet.total + (bet.pending?.amount ?? next) * (30 - bet.numbers.length) : null;
   const recoverable = bet.flashStraight ? flashDoublesRemaining(bet.numbers.length, bet.misses) : null;
   const status = bet.status === 'finished' ? `Finished · ${bet.outcome}` :
     bet.status === 'needsReturn' ? 'Hit detected · enter the amount actually returned to settle' :
+    bet.status === 'checkingBonus' ? 'Hit detected · checking Flash multiplier' :
+    bet.status === 'uncertain' ? bet.outcome :
+    bet.status === 'paused' ? 'Paused · recheck the same strategy to resume' :
     bet.pending ? 'Bet marked placed · waiting for result' :
-    bet.status === 'checkingBonus' ? 'Hit detected · checking Flash multiplier' : 'Ready to place (or skip by doing nothing)';
-  panel.innerHTML = `<div><b>Tracking: ${bet.name.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</b> · ${status}</div>
-    <div>Placed: ${bet.rounds} · Misses: ${bet.misses} · Running net: ${moneyTrack(bet.total)}</div>
+    'Ready to place (or skip by doing nothing)';
+  const balance = bet.bankrollBase == null ? null : bet.bankrollBase + bet.total;
+  const balanceShare = balance && balance > 0 ? ` (${(100 * stake / balance).toFixed(1)}% of bankroll)` : '';
+  panel.innerHTML = `<div><b>Tracking: ${bet.name.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</b> · ${status} · ${bankrollField()}</div>
+    <div class="tracked-session-stats">Spins selected: ${bet.spinsSelected || 0} · Bets placed: ${bet.rounds} · Total wagered: $${(bet.totalSpent || 0).toFixed(2)} · Misses: ${bet.misses} · Net: ${moneyTrack(bet.total)}</div>
     ${bet.status === 'active' && !bet.pending ? `<label>${bet.flashStraight ? 'Chip per number' : 'Total wager this round'}
       <input id="trackedAmount" type="number" min="0.01" step="0.01" value="${next.toFixed(2)}" style="width:85px"></label>
-      <span>Cost: $${stake.toFixed(2)}</span>
+      <span>Cost: $${stake.toFixed(2)}${balanceShare}</span>
       <button type="button" id="trackedPlace">Bet placed</button>` : ''}
-    ${bet.flashStraight && bet.status !== 'finished' ? `<div>Base payout if next placed bet hits: ${moneyTrack(hitNet)} · ${recoverable === Infinity ? 'Profitable doubles remain' : `${recoverable} profitable doubles remain`}.</div>` : ''}
+    ${bet.flashStraight && ['active', 'paused'].includes(bet.status) ? `<div>${bet.pending ? 'Net if placed bet hits' : 'Net if next bet hits'} at base payout: ${moneyTrack(hitNet)} · ${recoverable === Infinity ? 'Profitable doubles remain' : `${recoverable} profitable doubles remain`}.</div>` : ''}
     ${bet.status === 'needsReturn' ? `<label>Total returned on winning round <input id="trackedReturn" type="number" min="0" step="0.01" placeholder="Amount received"></label><button type="button" id="trackedSettle">Settle hit</button>` : ''}
     ${bet.status === 'finished' && bet.flashStraight ? `<label>Correct Flash winning multiplier <input id="trackedMultiplier" type="number" min="30" step="1" placeholder="30 for no bonus"></label><button type="button" id="trackedCorrectBonus">Correct payout</button>` : ''}
     <button type="button" id="trackedStop">${bet.status === 'finished' ? 'Clear' : 'Stop tracking'}</button>`;
+  bindBankrollField(panel);
   panel.querySelector('#trackedPlace')?.addEventListener('click', () => {
     const amount = Number(panel.querySelector('#trackedAmount')?.value);
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1e6) { alert('Enter a valid wager.'); return; }
@@ -624,28 +665,45 @@ function renderTrackedBet() {
     if (bet.flashStraight && bet.rounds === 0) bet.baseUnit = amount;
     bet.lastAmount = amount;
     bet.rounds++;
+    bet.totalSpent = (bet.totalSpent || 0) + amount * (bet.flashStraight ? bet.numbers.length : 1);
     saveTrackedBet();
   });
   panel.querySelector('#trackedStop')?.addEventListener('click', () => {
     if (bet.pending && !confirm('This bet has not settled. Stop tracking it?')) return;
+    if (bet.bankrollBase != null) manualBankroll = bet.bankrollBase + bet.total;
     trackedBet = null; saveTrackedBet();
   });
   panel.querySelector('#trackedSettle')?.addEventListener('click', () => {
     const returned = Number(panel.querySelector('#trackedReturn')?.value);
     if (!Number.isFinite(returned) || returned < 0 || returned > 1e9 || panel.querySelector('#trackedReturn').value === '') return;
     bet.total += returned - bet.pending.amount;
-    bet.pending = null; bet.status = 'finished'; bet.outcome = 'hit'; saveTrackedBet();
+    bet.pending = null; bet.status = 'finished'; bet.outcome = 'hit';
+    if (bet.bankrollBase != null) manualBankroll = bet.bankrollBase + bet.total;
+    saveTrackedBet();
   });
   panel.querySelector('#trackedCorrectBonus')?.addEventListener('click', () => {
     const multiplier = Number(panel.querySelector('#trackedMultiplier')?.value);
     if (!Number.isInteger(multiplier) || multiplier < 30 || !bet.finalAmount) return;
     bet.total += (multiplier - (bet.finalMultiplier || 30)) * bet.finalAmount;
-    bet.finalMultiplier = multiplier; bet.outcome = `hit (${multiplier}x)`; saveTrackedBet();
+    bet.finalMultiplier = multiplier; bet.outcome = `hit (${multiplier}x)`;
+    if (bet.bankrollBase != null) manualBankroll = bet.bankrollBase + bet.total;
+    saveTrackedBet();
   });
 }
 function updateTrackedBet(rolls) {
   const bet = trackedBet;
   if (!bet || bet.wheel !== getCurrentWheelId() || !Array.isArray(rolls) || rolls.length < 12) return;
+  if (bet.status !== 'finished') {
+    const seen = bet.lastSeenFingerprint;
+    const current = trackFingerprint(rolls);
+    if (!seen) bet.lastSeenFingerprint = current;
+    else if (seen !== current) {
+      const advanced = [1, 2, 3, 4, 5].find(n => trackFingerprint(rolls, n) === seen);
+      if (bet.status !== 'paused' || bet.pending) bet.spinsSelected = (bet.spinsSelected || 0) + (advanced || 1);
+      bet.lastSeenFingerprint = current;
+      saveTrackedBet();
+    }
+  }
   if (bet.status === 'checkingBonus' && bet.pending) {
     const hit = rolls.find(r => String(r.number) === String(bet.hitNumber) &&
       trackFingerprint(rolls, rolls.indexOf(r) + 1) === bet.pending.fingerprint);
@@ -656,11 +714,12 @@ function updateTrackedBet(rolls) {
       bet.finalAmount = bet.pending.amount;
       bet.finalMultiplier = payout;
       bet.pending = null; bet.status = 'finished'; bet.outcome = `hit (${payout}x)`;
+      if (bet.bankrollBase != null) manualBankroll = bet.bankrollBase + bet.total;
       saveTrackedBet();
     }
     return;
   }
-  if (!bet.pending || bet.status !== 'active') return;
+  if (!bet.pending || !['active', 'paused'].includes(bet.status)) return;
   const fingerprint = bet.pending.fingerprint;
   if (trackFingerprint(rolls) === fingerprint) return;
   const offset = [1, 2, 3, 4, 5].find(n => trackFingerprint(rolls, n) === fingerprint);
@@ -685,11 +744,7 @@ document.addEventListener('change', event => {
   if (input.checked) {
     startTrackedBet(input);
   } else if (trackedBet && trackedBet.name === input.dataset.strategy) {
-    if (trackedBet.pending && !confirm('This bet has not settled. Stop tracking it?')) {
-      input.checked = true;
-      return;
-    }
-    trackedBet = null;
+    trackedBet.status = 'paused';
     saveTrackedBet();
   }
 });

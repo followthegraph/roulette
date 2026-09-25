@@ -979,7 +979,8 @@
   width: auto;
 }
 
-@media (max-width: 1100px) {
+/* Preserve normal table columns until there is truly no room for two. */
+@media (max-width: 900px) {
   #globalHealthBanner, #heatmap, #streetStickyWrap, .best-opportunities-panel {
     position: static !important;
     top: auto !important;
@@ -1019,3 +1020,37 @@
 .track-choice input { margin: 0; width: 12px; height: 12px; accent-color: #2563eb; }
 .track-choice input:disabled { cursor: default; }
 .track-choice:has(input:checked) { color: #1452a2; font-weight: bold; }
+
+/* Keep the wide neighbor table inside its table column. */
+.table-wrapper, .neighbors-table-container { min-width: 0; }
+.neighbors-table-container { flex: 1 1 400px; width: 0; max-width: 100%; }
+#neighborsLocator, #neighborsTopDroughts, #neighborsInspector { min-width: 0; max-width: 100%; }
+#neighborsTopDroughts { overflow-x: auto; }
+.neighbors-opportunities { width: 100%; min-width: 0; }
+.neighbors-opportunities th, .neighbors-opportunities td { white-space: normal; overflow-wrap: anywhere; }
+#neighborsWheelOrder, #neighborsAscending { overflow-wrap: anywhere; }
+.tracked-session-stats { font-size: 12px; padding: 3px 0; }
+@media (max-width: 900px) {
+  .table-wrapper > .neighbors-table-container { flex: 1 1 100%; width: 100%; }
+}
+
+/* Keep the selected session visible without covering sticky headers. */
+body { padding-bottom: 220px; }
+#betTracker {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4000;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  max-height: 45vh;
+  overflow-y: auto;
+  margin: 0 !important;
+  box-sizing: border-box;
+  border-radius: 0 !important;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 -3px 12px rgba(0, 0, 0, .16);
+}
