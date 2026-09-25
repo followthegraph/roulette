@@ -966,6 +966,19 @@
   color: inherit;
 }
 
+.neighbors-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.neighbors-controls select,
+.neighbors-controls button {
+  width: auto;
+}
+
 @media (max-width: 1100px) {
   #globalHealthBanner, #heatmap, #streetStickyWrap, .best-opportunities-panel {
     position: static !important;

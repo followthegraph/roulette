@@ -324,9 +324,24 @@
         <div id="neighborsLocatorHeader"
           style="font-weight: bold; margin-bottom: 8px;">Top Neighbors Opportunities</div>
         <div style="font-size: 12px; margin-bottom: 8px;">Ranked by Bet Signal score. Average and maximum delay use the selected Stats Window. Blue values use the count after excluding zeros and consecutive repeats; black values in parentheses are raw.</div>
+        <div class="neighbors-controls">
+          <label for="neighborsWidthFilter">Neighbors on each side</label>
+          <select id="neighborsWidthFilter">
+            <option value="all">All widths</option>
+            <option value="1">±1</option>
+            <option value="2">±2</option>
+            <option value="3">±3</option>
+            <option value="4">±4</option>
+            <option value="5">±5</option>
+            <option value="6">±6</option>
+            <option value="7">±7</option>
+            <option value="8">±8</option>
+            <option value="9">±9</option>
+          </select>
+          <button type="button" id="neighborsShowAllToggle" style="display:none">Show All</button>
+          <button type="button" id="neighborsResetView">Reset view</button>
+        </div>
         <div id="neighborsTopDroughts">—</div>
-        <button type="button" id="neighborsShowAllToggle"
-          style="margin-top: 8px; display: none;">Show All</button>
       </div>
           <details id="neighborsInspector" class="neighbors-inspector">
             <summary>Wheel view and custom selection</summary>
@@ -1037,13 +1052,26 @@ function neighborRiskClass(stats) {
   return risk >= threshold * .75 ? 'risk-near' : 'risk-ok';
 }
 
-const neighborsSort = { column: 'score', ascending: false };
-
 function updateNeighborsTopDroughts(rolls) {
   const container = document.getElementById('neighborsTopDroughts');
   const header = document.getElementById('neighborsLocatorHeader');
   const toggleBtn = document.getElementById('neighborsShowAllToggle');
-  if (!container || !header || !toggleBtn) return;
+  const widthSelect = document.getElementById('neighborsWidthFilter');
+  const resetBtn = document.getElementById('neighborsResetView');
+  if (!container || !header || !toggleBtn || !widthSelect || !resetBtn) return;
+
+  widthSelect.onchange = () => {
+    toggleBtn.dataset.expanded = 'false';
+    updateNeighborsTopDroughts(window.neighborsWindowRolls || []);
+  };
+
+  resetBtn.onclick = () => {
+    widthSelect.value = 'all';
+    neighborsSort.column = 'score';
+    neighborsSort.ascending = false;
+    toggleBtn.dataset.expanded = 'false';
+    updateNeighborsTopDroughts(window.neighborsWindowRolls || []);
+  };
 
   header.textContent = `Top Neighbors Opportunities (${getStatsWindowLabel()})`;
 
@@ -1068,7 +1096,12 @@ function updateNeighborsTopDroughts(rolls) {
     }
   }
 
-  entries.sort((a, b) => {
+  const selectedWidth = widthSelect.value;
+  const filteredEntries = selectedWidth === 'all'
+    ? entries
+    : entries.filter(entry => entry.count === Number(selectedWidth));
+
+  filteredEntries.sort((a, b) => {
     const value = entry => neighborsSort.column === 'score'
       ? entry.scoreInfo.score
       : entry.stats[neighborsSort.column] === ''
@@ -1079,7 +1112,6 @@ function updateNeighborsTopDroughts(rolls) {
     const second = value(b);
     const missingA = first === null || !Number.isFinite(first);
     const missingB = second === null || !Number.isFinite(second);
-
     if (missingA !== missingB) return missingA ? 1 : -1;
 
     const comparison = missingA ? 0 : first - second;
@@ -1090,7 +1122,7 @@ function updateNeighborsTopDroughts(rolls) {
   });
 
   const expanded = toggleBtn.dataset.expanded === 'true';
-  const visible = expanded ? entries : entries.slice(0, 10);
+  const visible = expanded ? filteredEntries : filteredEntries.slice(0, 10);
 
   const sortHeader = (label, column) => `
     <th aria-sort="${
@@ -1155,8 +1187,11 @@ function updateNeighborsTopDroughts(rolls) {
     });
   });
 
-  toggleBtn.style.display = entries.length > 10 ? 'inline-block' : 'none';
-  toggleBtn.textContent = expanded ? 'Show Top 10' : `Show All ${entries.length}`;
+  toggleBtn.style.display =
+    filteredEntries.length > 10 ? 'inline-block' : 'none';
+  toggleBtn.textContent = expanded
+    ? 'Show Top 10'
+    : `Show All ${filteredEntries.length}`;
   toggleBtn.onclick = () => {
     toggleBtn.dataset.expanded = expanded ? 'false' : 'true';
     updateNeighborsTopDroughts(window.neighborsWindowRolls || []);
@@ -1172,7 +1207,6 @@ function updateNeighborsTopDroughts(rolls) {
     });
   });
 }
-
 function buildUrgencySnapshot(candidates) {
   const summary = { critical: 0, imminent: 0, watch: 0 };
   const list = Array.isArray(candidates) ? candidates : [];
@@ -2322,7 +2356,14 @@ function populateNeighborsControls() {
   heatModeSelect.value = 'neutral';
   centerSelect.dataset.ready = 'true';
   centerSelect.addEventListener('change', () => updateNeighborsPanel(window.latestRolls || []));
-  countSelect.addEventListener('change', () => updateNeighborsPanel(window.latestRolls || []));
+    countSelect.addEventListener('change', () => {
+    const filter = document.getElementById('neighborsWidthFilter');
+    if (filter) {
+      filter.value = countSelect.value === '0' ? 'all' : countSelect.value;
+      filter.dispatchEvent(new Event('change'));
+    }
+    updateNeighborsPanel(window.latestRolls || []);
+  });
   const commitHeatWindow = () => {
     heatInput.value = String(sanitizeNeighborsHeatWindow(heatInput.value, 25));
     updateNeighborsPanel(window.latestRolls || []);
