@@ -836,9 +836,19 @@ def receive_data():
 
             newest_roll = new_data[0] if new_data else None
 
-            if newest_roll and (not existing or newest_roll != existing[0]):
-                updated = [newest_roll] + existing
-                json_write(ROULETTE_ALL_JSON, updated)
+            if newest_roll and existing:
+                # A Flash bonus can appear after the result. Replace metadata on
+                # the same spin instead of appending an extra roll to history.
+                incoming_numbers = [str(r.get("number")) for r in new_data[:12]]
+                stored_numbers = [str(r.get("number")) for r in existing[:12]]
+                if incoming_numbers == stored_numbers:
+                    if newest_roll != existing[0]:
+                        existing[0] = newest_roll
+                        json_write(ROULETTE_ALL_JSON, existing)
+                else:
+                    json_write(ROULETTE_ALL_JSON, [newest_roll] + existing)
+            elif newest_roll:
+                json_write(ROULETTE_ALL_JSON, [newest_roll])
 
             from strategy_stats_generator import generate_strategy_stats
             generate_strategy_stats(

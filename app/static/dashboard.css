@@ -941,7 +941,7 @@
   .profit-compare-table tr:nth-child(even) {
     background: #f9fafb;
   }
-.neighbors-opportunities { width: auto%; }
+.neighbors-opportunities { width: auto; }
 .neighbors-opportunities th, .neighbors-opportunities td { white-space: nowrap; }
 .neighbors-drought-link { background: none; border: 0; padding: 0; color: #0645ad; text-decoration: underline; cursor: pointer; font: inherit; }
 .raw-value { color: #111; font-weight: normal; }
@@ -986,9 +986,36 @@
     z-index: auto !important;
   }
   body.scrolled #heatmap { max-height: none !important; overflow: visible; }
-  #urgencyOverlay { position: static; width: auto; max-width: 100%; margin-bottom: 12px; }
   .dashboard, .table-wrapper { min-width: 0; width: 100%; }
   .table-wrapper > .table-container { min-width: 0; flex: 1 1 100%; overflow-x: auto; }
   .best-opportunities-header { flex-wrap: wrap; }
   .best-opportunities-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* The urgency monitor floats at tablet and laptop widths. */
+@media (max-width: 600px) {
+  #urgencyOverlay {
+    position: static;
+    width: auto;
+    max-width: 100%;
+    margin-bottom: 12px;
+  }
+}
+
+.track-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 5px;
+  font-size: 10px;
+  font-weight: normal;
+  color: #555;
+  cursor: pointer;
+  opacity: .7;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.track-choice:hover, .track-choice:focus-within, .track-choice:has(input:checked) { opacity: 1; }
+.track-choice input { margin: 0; width: 12px; height: 12px; accent-color: #2563eb; }
+.track-choice input:disabled { cursor: default; }
+.track-choice:has(input:checked) { color: #1452a2; font-weight: bold; }

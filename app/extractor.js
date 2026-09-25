@@ -96,6 +96,13 @@
         return {
           number: raw === "00" ? "00" : num,
           color: detectColor(span || card),
+          // Flash displays the awarded multiplier inside the winning result card.
+          // Null means that no bonus was displayed; the base return is 30x.
+          multiplier: (() => {
+            const label = card.textContent?.match(/[×x]\s*([\d,]+)/i);
+            const value = label ? Number(label[1].replace(/,/g, "")) : null;
+            return Number.isFinite(value) && value >= 30 ? value : null;
+          })(),
         };
       }).filter(Boolean);
     }

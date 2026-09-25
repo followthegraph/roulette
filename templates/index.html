@@ -197,6 +197,7 @@
       </div>
     </div>
 
+    <section id="betTracker" role="region" aria-label="Bet tracker" style="margin:12px 0;padding:12px;border:1px solid #bbb;border-radius:8px;background:#f8f9fa">Bet tracker · Select Track in a strategy row to start.</section>
     <div class="dashboard">
       <div class="table-wrapper">
         <div class="table-container">
@@ -515,6 +516,184 @@
     let bestOpportunitiesInProgress = false;
     let bestOpportunitiesLastHtml = "";
 
+// One browser-local tracked strategy. No bets are submitted to the casino.
+const TRACK_KEY = 'roulette_single_bet_v1';
+const neighborsSort = { column: 'score', ascending: false };
+let trackedBet = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TRACK_KEY));
+    return saved && saved.wheel === getCurrentWheelId() ? saved : null;
+  } catch (_) { return null; }
+})();
+function saveTrackedBet() {
+  try { if (trackedBet) localStorage.setItem(TRACK_KEY, JSON.stringify(trackedBet));
+        else localStorage.removeItem(TRACK_KEY); }
+  catch (error) { console.warn('Bet tracking storage unavailable:', error); }
+  renderTrackedBet();
+}
+function moneyTrack(value) {
+  return `${value < 0 ? '-' : '+'}$${Math.abs(value).toFixed(2)}`;
+}
+function trackFingerprint(rolls, start = 0) {
+  return rolls.slice(start, start + 12).map(r => String(r.number)).join('|');
+}
+function flashDoublesRemaining(count, misses = 0) {
+  // Gross return on the winning chip is 30x, all other chips lose.
+  for (let level = misses; level < 16; level++) {
+    const previousLosses = count * (2 ** level - 1);
+    const net = (30 - count) * (2 ** level) - previousLosses;
+    if (net <= 0) return Math.max(0, level - misses);
+  }
+  return Infinity;
+}
+function flashNeighborScore(stats, count) {
+  const result = scoreStrategyRow(neighborScoreRow(stats));
+  if (getCurrentWheelId() !== 'flash-wheel' || result.score === null) return result;
+  const doubles = flashDoublesRemaining(2 * count + 1);
+  if (!Number.isFinite(doubles)) return result;
+  const ceiling = doubles === 0 ? 25 : doubles === 1 ? 40 : doubles === 2 ? 55 : doubles === 3 ? 65 : 75;
+  const score = Math.min(result.score, ceiling);
+  const label = score >= 90 ? 'Extreme' : score >= 80 ? 'Strong' : score >= 65 ? 'Watch' : score >= 50 ? 'Early' : 'Wait';
+  return { ...result, score, label, className: `score-${label.toLowerCase()}`,
+    breakdown: `${result.breakdown}\nFlash guaranteed return: 30x; ${doubles} profitable doubles after entry. Score capped at ${ceiling}.` };
+}
+function trackButton(label, center, width) {
+  const name = String(label);
+  const selected = trackedBet && trackedBet.wheel === getCurrentWheelId() && trackedBet.name === name;
+  const occupied = trackedBet && trackedBet.status !== 'finished' && !selected;
+  const escaped = name.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return `<label class="track-choice" title="Track this strategy"><input type="checkbox" class="track-strategy" aria-label="Track ${escaped}"
+    data-strategy="${escaped}" ${center === undefined ? '' : `data-center="${center}" data-width="${width}"`}
+    ${selected ? 'checked' : ''} ${occupied ? 'disabled' : ''}><span>Track</span></label>`;
+}
+function startTrackedBet(button) {
+  if (trackedBet && trackedBet.status !== 'finished') {
+    alert('Stop the current tracked bet before starting another.'); return;
+  }
+  const rolls = window.latestRolls || [];
+  if (rolls.length < 12) { alert('Wait for spin history to load.'); return; }
+  const center = Number(button.dataset.center), width = Number(button.dataset.width);
+  const neighbors = button.dataset.center !== undefined;
+  const numbers = neighbors ? getNeighborsNumbers(center, width) : getCoveredNumbersForStrategy(button.dataset.strategy);
+  if (!numbers.length) { alert('The covered numbers for this strategy are unavailable.'); return; }
+  const flashStraight = neighbors && getCurrentWheelId() === 'flash-wheel';
+  trackedBet = { wheel: getCurrentWheelId(), name: button.dataset.strategy, numbers,
+    flashStraight, misses: 0, total: 0, rounds: 0, pending: null, status: 'active',
+    baseUnit: 1, lastAmount: null, outcome: '', startedAt: Date.now() };
+  saveTrackedBet();
+  document.getElementById('betTracker')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function renderTrackedBet() {
+  const panel = document.getElementById('betTracker');
+  if (!panel) return;
+  document.querySelectorAll('.track-strategy').forEach(input => {
+    const selected = trackedBet && trackedBet.wheel === getCurrentWheelId() && trackedBet.name === input.dataset.strategy;
+    input.checked = !!selected;
+    input.disabled = !!(trackedBet && trackedBet.status !== 'finished' && !selected);
+  });
+  if (!trackedBet) {
+    panel.innerHTML = '<b>Bet tracker</b> · Select Track in a strategy row to start one bet.';
+    return;
+  }
+  const bet = trackedBet;
+  const next = bet.flashStraight ? bet.baseUnit * (2 ** bet.misses) : (bet.lastAmount === null ? 1 : bet.lastAmount * 2);
+  const stake = bet.flashStraight ? next * bet.numbers.length : next;
+  const hitNet = bet.flashStraight ? bet.total + next * (30 - bet.numbers.length) : null;
+  const recoverable = bet.flashStraight ? flashDoublesRemaining(bet.numbers.length, bet.misses) : null;
+  const status = bet.status === 'finished' ? `Finished · ${bet.outcome}` :
+    bet.status === 'needsReturn' ? 'Hit detected · enter the amount actually returned to settle' :
+    bet.pending ? 'Bet marked placed · waiting for result' :
+    bet.status === 'checkingBonus' ? 'Hit detected · checking Flash multiplier' : 'Ready to place (or skip by doing nothing)';
+  panel.innerHTML = `<div><b>Tracking: ${bet.name.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</b> · ${status}</div>
+    <div>Placed: ${bet.rounds} · Misses: ${bet.misses} · Running net: ${moneyTrack(bet.total)}</div>
+    ${bet.status === 'active' && !bet.pending ? `<label>${bet.flashStraight ? 'Chip per number' : 'Total wager this round'}
+      <input id="trackedAmount" type="number" min="0.01" step="0.01" value="${next.toFixed(2)}" style="width:85px"></label>
+      <span>Cost: $${stake.toFixed(2)}</span>
+      <button type="button" id="trackedPlace">Bet placed</button>` : ''}
+    ${bet.flashStraight && bet.status !== 'finished' ? `<div>Base payout if next placed bet hits: ${moneyTrack(hitNet)} · ${recoverable === Infinity ? 'Profitable doubles remain' : `${recoverable} profitable doubles remain`}.</div>` : ''}
+    ${bet.status === 'needsReturn' ? `<label>Total returned on winning round <input id="trackedReturn" type="number" min="0" step="0.01" placeholder="Amount received"></label><button type="button" id="trackedSettle">Settle hit</button>` : ''}
+    ${bet.status === 'finished' && bet.flashStraight ? `<label>Correct Flash winning multiplier <input id="trackedMultiplier" type="number" min="30" step="1" placeholder="30 for no bonus"></label><button type="button" id="trackedCorrectBonus">Correct payout</button>` : ''}
+    <button type="button" id="trackedStop">${bet.status === 'finished' ? 'Clear' : 'Stop tracking'}</button>`;
+  panel.querySelector('#trackedPlace')?.addEventListener('click', () => {
+    const amount = Number(panel.querySelector('#trackedAmount')?.value);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1e6) { alert('Enter a valid wager.'); return; }
+    if (bet.flashStraight && amount > 50) { alert('Flash straight-up chips are limited to $50 per number.'); return; }
+    const current = window.latestRolls || [];
+    if (current.length < 12) return;
+    bet.pending = { fingerprint: trackFingerprint(current), amount, at: Date.now() };
+    if (bet.flashStraight && bet.rounds === 0) bet.baseUnit = amount;
+    bet.lastAmount = amount;
+    bet.rounds++;
+    saveTrackedBet();
+  });
+  panel.querySelector('#trackedStop')?.addEventListener('click', () => {
+    if (bet.pending && !confirm('This bet has not settled. Stop tracking it?')) return;
+    trackedBet = null; saveTrackedBet();
+  });
+  panel.querySelector('#trackedSettle')?.addEventListener('click', () => {
+    const returned = Number(panel.querySelector('#trackedReturn')?.value);
+    if (!Number.isFinite(returned) || returned < 0 || returned > 1e9 || panel.querySelector('#trackedReturn').value === '') return;
+    bet.total += returned - bet.pending.amount;
+    bet.pending = null; bet.status = 'finished'; bet.outcome = 'hit'; saveTrackedBet();
+  });
+  panel.querySelector('#trackedCorrectBonus')?.addEventListener('click', () => {
+    const multiplier = Number(panel.querySelector('#trackedMultiplier')?.value);
+    if (!Number.isInteger(multiplier) || multiplier < 30 || !bet.finalAmount) return;
+    bet.total += (multiplier - (bet.finalMultiplier || 30)) * bet.finalAmount;
+    bet.finalMultiplier = multiplier; bet.outcome = `hit (${multiplier}x)`; saveTrackedBet();
+  });
+}
+function updateTrackedBet(rolls) {
+  const bet = trackedBet;
+  if (!bet || bet.wheel !== getCurrentWheelId() || !Array.isArray(rolls) || rolls.length < 12) return;
+  if (bet.status === 'checkingBonus' && bet.pending) {
+    const hit = rolls.find(r => String(r.number) === String(bet.hitNumber) &&
+      trackFingerprint(rolls, rolls.indexOf(r) + 1) === bet.pending.fingerprint);
+    const multiplier = Number(hit?.multiplier);
+    if (Number.isFinite(multiplier) && multiplier >= 30 || Date.now() - bet.hitAt > 9000) {
+      const payout = Number.isFinite(multiplier) && multiplier >= 30 ? multiplier : 30;
+      bet.total += bet.pending.amount * (payout - bet.numbers.length);
+      bet.finalAmount = bet.pending.amount;
+      bet.finalMultiplier = payout;
+      bet.pending = null; bet.status = 'finished'; bet.outcome = `hit (${payout}x)`;
+      saveTrackedBet();
+    }
+    return;
+  }
+  if (!bet.pending || bet.status !== 'active') return;
+  const fingerprint = bet.pending.fingerprint;
+  if (trackFingerprint(rolls) === fingerprint) return;
+  const offset = [1, 2, 3, 4, 5].find(n => trackFingerprint(rolls, n) === fingerprint);
+  if (offset !== 1) {
+    bet.status = 'uncertain'; bet.outcome = 'Multiple spins or a history reset occurred; stop and restart tracking.';
+    saveTrackedBet(); return;
+  }
+  const number = String(rolls[0].number);
+  if (bet.numbers.some(n => String(n) === number)) {
+    if (bet.flashStraight) {
+      bet.status = 'checkingBonus'; bet.hitNumber = number; bet.hitAt = Date.now();
+    } else bet.status = 'needsReturn';
+  } else {
+    bet.total -= bet.pending.amount * (bet.flashStraight ? bet.numbers.length : 1);
+    bet.misses++; bet.pending = null;
+  }
+  saveTrackedBet();
+}
+document.addEventListener('change', event => {
+  const input = event.target.closest('.track-strategy');
+  if (!input) return;
+  if (input.checked) {
+    startTrackedBet(input);
+  } else if (trackedBet && trackedBet.name === input.dataset.strategy) {
+    if (trackedBet.pending && !confirm('This bet has not settled. Stop tracking it?')) {
+      input.checked = true;
+      return;
+    }
+    trackedBet = null;
+    saveTrackedBet();
+  }
+});
+document.addEventListener('DOMContentLoaded', renderTrackedBet);
     function getStreetLimit() {
       const input = document.getElementById("streetLimit");
       const val = parseInt(input?.value);
@@ -1052,8 +1231,6 @@ function neighborRiskClass(stats) {
   return risk >= threshold * .75 ? 'risk-near' : 'risk-ok';
 }
 
-const neighborsSort = { column: 'score', ascending: false };
-
 function updateNeighborsTopDroughts(rolls) {
   const container = document.getElementById('neighborsTopDroughts');
   const header = document.getElementById('neighborsLocatorHeader');
@@ -1093,7 +1270,7 @@ function updateNeighborsTopDroughts(rolls) {
       );
       if (stats.rollsSince === '') continue;
 
-      const scoreInfo = scoreStrategyRow(neighborScoreRow(stats));
+      const scoreInfo = flashNeighborScore(stats, count);
       entries.push({ center, count, stats, scoreInfo });
     }
   }
@@ -1167,7 +1344,7 @@ function updateNeighborsTopDroughts(rolls) {
               <td>${neighborDelayHtml(entry.stats)}</td>
               <td>${entry.stats.avgDelay === '' ? '—' : entry.stats.avgDelay}</td>
               <td>${entry.stats.maxDelay === '' ? '—' : entry.stats.maxDelay}</td>
-              <td>${neighborSignalHtml(entry.scoreInfo)}</td>
+              <td>${neighborSignalHtml(entry.scoreInfo)} ${trackButton(`${entry.center} ± ${entry.count}`, entry.center, entry.count)}</td>
               <td class="${neighborRiskClass(entry.stats)}">
                 <span class="progression-badge progression-double">2x</span>
                 ${neighborRiskHtml(entry.stats)}
@@ -1666,12 +1843,12 @@ function buildUrgencySnapshot(candidates) {
   const row = document.getElementById('neighborsStatsRow');
   if (!row) return;
   row.innerHTML = '';
-  const scoreInfo = scoreStrategyRow(neighborScoreRow(stats));
+  const scoreInfo = flashNeighborScore(stats, neighborCount);
   row.innerHTML = `<td>${centerNumber} ± ${neighborCount} (${numbers.length} numbers)</td>
     <td>${neighborDelayHtml(stats)}</td>
     <td>${stats.avgDelay === '' ? '—' : stats.avgDelay}</td>
     <td>${stats.maxDelay === '' ? '—' : stats.maxDelay}</td>
-    <td>${neighborSignalHtml(scoreInfo)}</td>
+    <td>${neighborSignalHtml(scoreInfo)} ${trackButton(`${centerNumber} ± ${neighborCount}`, centerNumber, neighborCount)}</td>
     <td class="${neighborRiskClass(stats)}"><span class="progression-badge progression-double">2x</span>${neighborRiskHtml(stats)}</td>`;
 }
 
@@ -2708,6 +2885,7 @@ function sameNumberSet(a, b) {
 
       const rolls = await fetch(`/roulette_data.json?t=${timestamp}`).then(r => r.json());
       window.latestRolls = rolls;
+      updateTrackedBet(rolls);
 
       document.getElementById("lastUpdated").innerText =
         "Last updated: " + new Date().toLocaleTimeString();
@@ -2949,6 +3127,7 @@ setTimeout(() => {
                 <span class="decision-label">${scoreInfo.label}</span>
               `;
             }
+            td.insertAdjacentHTML('beforeend', ` ${trackButton(displayStrategyName(row['Betting Strategy']).replace(/^'/, ''))}`);
           }
 
           else {
@@ -4033,9 +4212,11 @@ function attachStrategyProfileHandlers() {
       activeProfileStrategy = strategyCell.textContent.trim();
       await openStrategyProfileModal(activeProfileStrategy);
     };
-    signalCell.addEventListener('click', openDetails);
+    signalCell.addEventListener('click', event => {
+      if (!event.target.closest('.track-choice')) openDetails();
+    });
     signalCell.addEventListener('keydown', event => {
-      if (event.key === 'Enter' || event.key === ' ') {
+      if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('.track-choice')) {
         event.preventDefault();
         openDetails();
       }
