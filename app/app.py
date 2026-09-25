@@ -1041,7 +1041,32 @@ def calculate_composite_hit_profit(strategy, hit_number, chip_multiplier=1, unit
     gross_return = sum((odds + 1) * chip for group in groups if hit_number in group)
     return gross_return - len(groups) * chip
 
-def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1, max_steps=8, table_limit=2000):
+
+def flash_position_safe(strategy, chip_multiplier, unit):
+    """Check each component against the Flash limits supplied for this wheel."""
+    name = str(strategy or "").lstrip("'").strip()
+    per_bet_limits = {
+        "straight": 50, "split": 1333, "trio": 2000, "corner": 2667,
+    }
+    if name in FRENCH_BETS:
+        return all(
+            bet["chips"] * chip_multiplier * unit <= per_bet_limits[bet["type"]]
+            for bet in FRENCH_BETS[name]["bets"]
+        )
+    if name == "Zero":
+        limit = 50
+    elif name.startswith("Adj Street,") or "Street" in name:
+        limit = 2000
+    elif "Line" in name:
+        limit = 4000
+    else:
+        # Dozens, columns/rows and outside bets share this provided limit.
+        limit = 6667
+    return chip_multiplier * unit <= limit
+
+def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1,
+                          max_steps=8, table_limit=2000, entry_offset=0,
+                          evaluation="in_sample"):
     numbers = get_strategy_numbers(strategy)
 
     if not numbers:
@@ -1053,6 +1078,11 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
     rows = get_global_rolls_for_stats(wheel_id, window)
     rolls = list(reversed(rows))
     nums = [int(r["number"]) for r in rolls]
+    if evaluation not in ("in_sample", "holdout") or not 0 <= entry_offset <= 20:
+        return None
+    split_index = int(len(nums) * .7) if evaluation == "holdout" else 0
+    if evaluation == "holdout" and (split_index < 50 or len(nums) - split_index < 25):
+        return None
 
     hit_events = [
         {"index": i, "number": n}
@@ -1062,10 +1092,17 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
 
     hit_indices = [h["index"] for h in hit_events]
 
-    delays = [
+    train_delays = [
         hit_indices[i] - hit_indices[i - 1]
         for i in range(1, len(hit_indices))
+        if evaluation == "in_sample" or hit_indices[i] < split_index
     ]
+    evaluated_pairs = [
+        (hit_events[i - 1], hit_events[i])
+        for i in range(1, len(hit_events))
+        if evaluation == "in_sample" or hit_events[i - 1]["index"] >= split_index
+    ]
+    delays = [later["index"] - earlier["index"] for earlier, later in evaluated_pairs]
 
     def percentile(values, p):
         if not values:
@@ -1082,10 +1119,10 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         return values[f] * (c - k) + values[c] * (k - f)
 
     percentile_map = {
-        "P90": percentile(delays, 90),
-        "P95": percentile(delays, 95),
-        "P97": percentile(delays, 97),
-        "P99": percentile(delays, 99),
+        "P90": percentile(train_delays, 90),
+        "P95": percentile(train_delays, 95),
+        "P97": percentile(train_delays, 97),
+        "P99": percentile(train_delays, 99),
     }
 
     threshold = percentile_map.get(str(entry).upper())
@@ -1093,7 +1130,8 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
     if threshold is None:
         return None
 
-    threshold = math.ceil(threshold)
+    threshold_base = math.ceil(threshold)
+    threshold = threshold_base + entry_offset
 
     base_units = get_base_units_for_strategy(strategy)
     net_profit_per_unit = get_net_profit_for_strategy_bundle(strategy) or 1
@@ -1104,9 +1142,9 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
     peak = 0
     max_drawdown = 0
 
-    for event_index in range(1, len(hit_events)):
-        delay = hit_events[event_index]["index"] - hit_events[event_index - 1]["index"]
-        hit_number = hit_events[event_index]["number"]
+    for previous_hit, next_hit in evaluated_pairs:
+        delay = next_hit["index"] - previous_hit["index"]
+        hit_number = next_hit["number"]
 
         # Entry is observable after the threshold spin has already completed.
         # The first actionable wager is on the following spin.
@@ -1117,7 +1155,13 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
 
         attempts = min(wait_after_entry + 1, max_steps)
         stakes = [base_units * (progression_multiplier ** i) * unit for i in range(attempts)]
-        affordable = [stake for stake in stakes if stake <= table_limit]
+        affordable = [
+            stake for i, stake in enumerate(stakes)
+            if stake <= table_limit and (
+                wheel_id != "flash-wheel"
+                or flash_position_safe(strategy, progression_multiplier ** i, unit)
+            )
+        ]
         if len(affordable) != len(stakes):
             stakes = affordable
             stopped_at_limit = True
@@ -1240,6 +1284,8 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
 
     historical_worst_case_table_safe = (
         max_progression_bet <= table_limit
+        and (wheel_id != "flash-wheel" or not attempted_steps
+             or flash_position_safe(strategy, progression_multiplier ** (attempted_steps - 1), unit))
     )
 
     return {
@@ -1249,6 +1295,10 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         "window": window,
         "entry": entry,
         "threshold": threshold,
+        "threshold_base": threshold_base,
+        "entry_offset": entry_offset,
+        "evaluation": evaluation,
+        "evaluation_roll_count": len(nums) - split_index,
         "unit": unit,
         "base_units": base_units,
         "max_steps": max_steps,
@@ -1415,6 +1465,10 @@ def profit_sim():
     unit = float(request.args.get("unit", 1))
     max_steps = int(request.args.get("max_steps", 8))
     table_limit = float(request.args.get("table_limit", 2000))
+    entry_offset = max(0, min(20, int(request.args.get("entry_offset", 0))))
+    evaluation = request.args.get("evaluation", "in_sample")
+    if evaluation not in ("in_sample", "holdout"):
+        return jsonify({"ok": False, "error": "Invalid evaluation mode"}), 400
 
     result = run_profit_simulation(
         wheel_id=wheel_id,
@@ -1424,6 +1478,8 @@ def profit_sim():
         unit=unit,
         max_steps=max_steps,
         table_limit=table_limit,
+        entry_offset=entry_offset,
+        evaluation=evaluation,
     )
 
     if not result:
@@ -1445,6 +1501,10 @@ def profit_rank():
     max_steps = int(request.args.get("max_steps", 8))
     min_entries = int(request.args.get("min_entries", 5))
     table_limit = float(request.args.get("table_limit", 2000))
+    entry_offset = max(0, min(20, int(request.args.get("entry_offset", 0))))
+    evaluation = request.args.get("evaluation", "in_sample")
+    if evaluation not in ("in_sample", "holdout"):
+        return jsonify({"ok": False, "error": "Invalid evaluation mode"}), 400
 
     entries = ["P90", "P95", "P97", "P99"]
     results = []
@@ -1474,6 +1534,8 @@ def profit_rank():
                 unit=unit,
                 max_steps=max_steps,
                 table_limit=table_limit,
+                entry_offset=entry_offset,
+                evaluation=evaluation,
             )
 
             if not result:
@@ -1530,6 +1592,8 @@ def profit_rank():
         "ranked": results,
         "top_10": results[:10],
         "table_limit": table_limit,
+        "entry_offset": entry_offset,
+        "evaluation": evaluation,
     })
 
 @app.route("/profit-compare.json")
@@ -1541,6 +1605,10 @@ def profit_compare():
         max_steps = int(request.args.get("max_steps", 8))
         min_entries = int(request.args.get("min_entries", 5))
         table_limit = float(request.args.get("table_limit", 2000))
+        entry_offset = max(0, min(20, int(request.args.get("entry_offset", 0))))
+        evaluation = request.args.get("evaluation", "in_sample")
+        if evaluation not in ("in_sample", "holdout"):
+            return jsonify({"ok": False, "error": "Invalid evaluation mode"}), 400
 
         windows = ["500", "2500", "all"]
         entries = ["P90", "P95", "P97", "P99"]
@@ -1576,6 +1644,8 @@ def profit_compare():
                         unit=unit,
                         max_steps=max_steps,
                         table_limit=table_limit,
+                        entry_offset=entry_offset,
+                        evaluation=evaluation,
                     )
 
                     if not sim:
@@ -1617,14 +1687,14 @@ def profit_compare():
                     window_scores.append(calculate_bot_readiness(best))
 
                     elapsed_hours = get_window_elapsed_hours(wheel_id, window)
+                    if elapsed_hours and evaluation == "holdout":
+                        elapsed_hours *= best["evaluation_roll_count"] / max(best["roll_count"], 1)
 
                     if best and elapsed_hours:
                         entry_count = best.get("total_entries") or 0
                         net_profit = best.get("net_profit") or 0
 
                         best["elapsed_hours"] = elapsed_hours
-                        elapsed_hours = get_window_elapsed_hours(wheel_id, window)
-
                         if best:
                             best["elapsed_hours"] = elapsed_hours
 
@@ -1710,6 +1780,8 @@ def profit_compare():
             "max_steps": max_steps,
             "min_entries": min_entries,
             "table_limit": table_limit,
+            "entry_offset": entry_offset,
+            "evaluation": evaluation,
             "windows": windows,
             "results": results,
             "top_10": results[:10],

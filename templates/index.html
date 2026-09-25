@@ -88,12 +88,17 @@
           <label>Table Limit</label>
           <input id="profitTableLimit" type="number" value="2000" min="1">
 
+          <label for="profitEntryOffset">Extra spins after threshold</label>
+          <input id="profitEntryOffset" type="number" value="0" min="0" max="20">
+          <label for="profitEvaluation">Evaluation</label>
+          <select id="profitEvaluation"><option value="in_sample">Same rolls (exploratory)</option><option value="holdout">Older 70% → newer 30%</option></select>
+
           <button type="button" id="runProfitRankBtn">Run</button>
           <button type="button" id="runProfitCompareBtn">Compare Windows</button>
         </div>
     
         <div class="profit-sim-note">
-          This sim answers: “If this strategy was entered at its best tested percentile threshold, what would the net result have been?”
+          This sim answers: “If this strategy was entered at its best tested percentile threshold, what would the net result have been?” Extra spins delay the first wager; a threshold of 6 with 2 extra spins places the first wager after 8 completed misses.
           French bets use exact chip-layout payout modeling. Unit Size means the value of one chip; each strategy may require multiple chips as its base stake.
         </div>
     
@@ -1914,6 +1919,8 @@ async function fetchProfitRank() {
   const maxSteps = document.getElementById("profitMaxSteps")?.value || "8";
   const minEntries = document.getElementById("profitMinEntries")?.value || "5";
   const tableLimit = document.getElementById("profitTableLimit")?.value || "2000";
+  const entryOffset = document.getElementById("profitEntryOffset")?.value || "0";
+  const evaluation = document.getElementById("profitEvaluation")?.value || "in_sample";
 
   const url =
     `/profit-rank.json` +
@@ -1922,7 +1929,9 @@ async function fetchProfitRank() {
     `&unit=${encodeURIComponent(unit)}` +
     `&max_steps=${encodeURIComponent(maxSteps)}` +
     `&min_entries=${encodeURIComponent(minEntries)}` +
-    `&table_limit=${encodeURIComponent(tableLimit)}`;
+    `&table_limit=${encodeURIComponent(tableLimit)}` +
+    `&entry_offset=${encodeURIComponent(entryOffset)}` +
+    `&evaluation=${encodeURIComponent(evaluation)}`;
 
   return fetch(url).then(r => r.json());
 }
@@ -1944,6 +1953,7 @@ function renderProfitRank(data) {
       <b>Window:</b> ${data.window} |
       <b>Unit:</b> ${data.unit} |
       <b>Max Steps:</b> ${data.max_steps}
+      | <b>Extra spins:</b> ${data.entry_offset ?? 0} | <b>Evaluation:</b> ${data.evaluation === 'holdout' ? 'older 70% → newer 30%' : 'same rolls'}
     </div>
 
     <div class="profit-cards">
@@ -1997,6 +2007,8 @@ async function fetchProfitCompare() {
   const maxSteps = document.getElementById("profitMaxSteps")?.value || "8";
   const minEntries = document.getElementById("profitMinEntries")?.value || "5";
   const tableLimit = document.getElementById("profitTableLimit")?.value || "2000";
+  const entryOffset = document.getElementById("profitEntryOffset")?.value || "0";
+  const evaluation = document.getElementById("profitEvaluation")?.value || "in_sample";
 
   const url =
     `/profit-compare.json` +
@@ -2004,7 +2016,9 @@ async function fetchProfitCompare() {
     `&unit=${encodeURIComponent(unit)}` +
     `&max_steps=${encodeURIComponent(maxSteps)}` +
     `&min_entries=${encodeURIComponent(minEntries)}` +
-    `&table_limit=${encodeURIComponent(tableLimit)}`;
+    `&table_limit=${encodeURIComponent(tableLimit)}` +
+    `&entry_offset=${encodeURIComponent(entryOffset)}` +
+    `&evaluation=${encodeURIComponent(evaluation)}`;
 
   return fetch(url).then(r => r.json());
 }
@@ -2040,9 +2054,9 @@ function renderProfitCompare(data) {
     <div class="profit-summary">
       <b>Conservative Bot Comparison</b> |
       <b>Wheel:</b> ${data.wheel_id} |
-      <b>Table Limit:</b> ${data.table_limit}
+      <b>Table Limit:</b> ${data.table_limit} | <b>Extra spins:</b> ${data.entry_offset ?? 0} | <b>Evaluation:</b> ${data.evaluation === 'holdout' ? 'older 70% → newer 30%' : 'same rolls'}
       <div style="margin-top:4px; font-size:12px;">
-        Historical, in-sample comparison: thresholds are chosen using the same rolls being tested.
+        ${data.evaluation === 'holdout' ? 'Thresholds are calculated from the oldest 70% of rolls and evaluated on the newest 30%; the time estimate assumes a constant spin rate.' : 'Historical, in-sample comparison: thresholds are chosen using the same rolls being tested.'}
         The 500 and 2500 windows overlap with All; their profitability counts are not independent trials.
         Drawdown includes interim losing spins. Table Safe checks the configured single-bet limit, while Bank Roll Needed shows cumulative stake.
         Flash simulations use base payouts and exclude unrecorded bonuses.
@@ -2246,7 +2260,36 @@ function renderProfitCompareDetails(row) {
       Entry means which percentile trigger won for that window. Threshold means the delay count where betting would begin.
       A strategy with the same entry/threshold across all windows is usually more stable than one that changes heavily by window.
     </div>
+    <div><button type="button" id="compareEntryDelays">Compare +0, +1, +2 spins</button><div id="entryDelayResults"></div></div>
   `;
+  document.getElementById('compareEntryDelays').onclick = () => compareEntryDelays(row);
+}
+
+async function compareEntryDelays(row) {
+  const target = document.getElementById('entryDelayResults');
+  if (!target) return;
+  const windowSize = document.getElementById('profitWindow').value;
+  const entry = row.results_by_window?.[windowSize]?.entry || row.all_db_entry;
+  if (!entry) { target.textContent = 'No entry percentile is available for this window.'; return; }
+  target.textContent = 'Calculating entry scenarios…';
+  const base = new URLSearchParams({wheel_id: getCurrentWheelId(), strategy: row.strategy,
+    window: windowSize, entry, unit: document.getElementById('profitUnit').value,
+    max_steps: document.getElementById('profitMaxSteps').value,
+    table_limit: document.getElementById('profitTableLimit').value,
+    evaluation: document.getElementById('profitEvaluation').value});
+  try {
+    const results = await Promise.all([0, 1, 2].map(async offset => {
+      const params = new URLSearchParams(base);
+      params.set('entry_offset', String(offset));
+      const response = await fetch(`/profit-sim.json?${params}`);
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Simulation failed');
+      return data;
+    }));
+    const bankroll = trackedBet?.wheel === getCurrentWheelId() && trackedBet.bankrollBase != null
+      ? trackedBet.bankrollBase + trackedBet.total : manualBankroll;
+    target.innerHTML = `<div style="overflow-x:auto"><table class="profit-compare-table"><thead><tr><th>Entry</th><th>Threshold</th><th>Entries</th><th>Net</th><th>ROI</th><th>Win Rate</th><th>Drawdown</th><th>Max Single Bet</th><th>Bank Roll Needed</th><th>Bankroll Fit</th><th>Table Safe</th></tr></thead><tbody>${results.map((r, offset) => `<tr><td>${entry} +${offset}</td><td>${r.threshold}</td><td>${r.total_entries}</td><td>${formatMoneyish(r.net_profit)}</td><td>${r.roi}%</td><td>${r.win_rate}%</td><td>${formatMoneyish(r.max_drawdown)}</td><td>${formatMoneyish(r.max_progression_bet)}</td><td>${formatMoneyish(r.historical_risk_required)}</td><td>${bankroll == null || r.historical_risk_required == null ? '—' : bankroll >= r.historical_risk_required ? '✅' : '$' + formatMoneyish(r.historical_risk_required - bankroll) + ' short'}</td><td>${r.historical_worst_case_table_safe ? '✅' : '❌'}</td></tr>`).join('')}</tbody></table></div><div class="profit-sim-note">These are historical outcomes for the selected strategy and window. A later entry can reduce the number of opportunities and does not predict the next spin.</div>`;
+  } catch (error) { target.textContent = `Could not compare entries: ${error.message}`; }
 }
 
 async function runProfitCompare() {
