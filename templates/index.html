@@ -1037,44 +1037,140 @@ function neighborRiskClass(stats) {
   return risk >= threshold * .75 ? 'risk-near' : 'risk-ok';
 }
 
+const neighborsSort = { column: 'score', ascending: false };
+
 function updateNeighborsTopDroughts(rolls) {
   const container = document.getElementById('neighborsTopDroughts');
   const header = document.getElementById('neighborsLocatorHeader');
   const toggleBtn = document.getElementById('neighborsShowAllToggle');
   if (!container || !header || !toggleBtn) return;
+
   header.textContent = `Top Neighbors Opportunities (${getStatsWindowLabel()})`;
+
   if (!Array.isArray(rolls) || !rolls.length) {
     container.textContent = 'No rolls available for this window.';
     toggleBtn.style.display = 'none';
     return;
   }
+
   const entries = [];
   for (let count = 1; count <= 9; count++) {
     for (const center of wheelOrder) {
-      const stats = computeNeighborsStats(rolls, getNeighborsNumbers(center, count), `${center} ± ${count}`);
+      const stats = computeNeighborsStats(
+        rolls,
+        getNeighborsNumbers(center, count),
+        `${center} ± ${count}`
+      );
       if (stats.rollsSince === '') continue;
+
       const scoreInfo = scoreStrategyRow(neighborScoreRow(stats));
       entries.push({ center, count, stats, scoreInfo });
     }
   }
-  entries.sort((a, b) => (b.scoreInfo.score ?? -1) - (a.scoreInfo.score ?? -1)
-    || b.stats.adjustedRollsSince - a.stats.adjustedRollsSince
-    || a.count - b.count
-    || wheelOrder.indexOf(a.center) - wheelOrder.indexOf(b.center));
+
+  entries.sort((a, b) => {
+    const value = entry => neighborsSort.column === 'score'
+      ? entry.scoreInfo.score
+      : entry.stats[neighborsSort.column] === ''
+        ? null
+        : Number(entry.stats[neighborsSort.column]);
+
+    const first = value(a);
+    const second = value(b);
+    const missingA = first === null || !Number.isFinite(first);
+    const missingB = second === null || !Number.isFinite(second);
+
+    if (missingA !== missingB) return missingA ? 1 : -1;
+
+    const comparison = missingA ? 0 : first - second;
+    return (neighborsSort.ascending ? comparison : -comparison)
+      || b.stats.adjustedRollsSince - a.stats.adjustedRollsSince
+      || a.count - b.count
+      || wheelOrder.indexOf(a.center) - wheelOrder.indexOf(b.center);
+  });
+
   const expanded = toggleBtn.dataset.expanded === 'true';
   const visible = expanded ? entries : entries.slice(0, 10);
-  container.innerHTML = `<div style="overflow-x:auto"><table class="neighbors-opportunities"><thead><tr><th>Betting Strategy</th><th>Rolls Since Last Hit</th><th>Avg Delay</th><th>Max Delay</th><th>Bet Signal</th><th>Martingale Risk</th></tr></thead><tbody>${visible.map(entry => `<tr><td><button type="button" class="neighbors-drought-link" data-center="${entry.center}" data-count="${entry.count}">${entry.center} ± ${entry.count}</button> <small>(${entry.count * 2 + 1} numbers)</small></td><td>${neighborDelayHtml(entry.stats)}</td><td>${entry.stats.avgDelay === '' ? '—' : entry.stats.avgDelay}</td><td>${entry.stats.maxDelay === '' ? '—' : entry.stats.maxDelay}</td><td>${neighborSignalHtml(entry.scoreInfo)}</td><td class="${neighborRiskClass(entry.stats)}"><span class="progression-badge progression-double">2x</span>${neighborRiskHtml(entry.stats)}</td></tr>`).join('')}</tbody></table></div>`;
+
+  const sortHeader = (label, column) => `
+    <th aria-sort="${
+      neighborsSort.column === column
+        ? neighborsSort.ascending ? 'ascending' : 'descending'
+        : 'none'
+    }">
+      <button type="button" class="neighbors-sort" data-column="${column}">
+        ${label}${
+          neighborsSort.column === column
+            ? neighborsSort.ascending ? ' ▲' : ' ▼'
+            : ''
+        }
+      </button>
+    </th>`;
+
+  container.innerHTML = `
+    <div style="overflow-x:auto">
+      <table class="neighbors-opportunities">
+        <thead>
+          <tr>
+            <th>Betting Strategy</th>
+            <th>Rolls Since Last Hit</th>
+            ${sortHeader('Avg Delay', 'avgDelay')}
+            ${sortHeader('Max Delay', 'maxDelay')}
+            ${sortHeader('Bet Signal', 'score')}
+            <th>Martingale Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${visible.map(entry => `
+            <tr>
+              <td>
+                <button type="button" class="neighbors-drought-link"
+                  data-center="${entry.center}" data-count="${entry.count}">
+                  ${entry.center} ± ${entry.count}
+                </button>
+                <small>(${entry.count * 2 + 1} numbers)</small>
+              </td>
+              <td>${neighborDelayHtml(entry.stats)}</td>
+              <td>${entry.stats.avgDelay === '' ? '—' : entry.stats.avgDelay}</td>
+              <td>${entry.stats.maxDelay === '' ? '—' : entry.stats.maxDelay}</td>
+              <td>${neighborSignalHtml(entry.scoreInfo)}</td>
+              <td class="${neighborRiskClass(entry.stats)}">
+                <span class="progression-badge progression-double">2x</span>
+                ${neighborRiskHtml(entry.stats)}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>`;
+
+  container.querySelectorAll('.neighbors-sort').forEach(button => {
+    button.addEventListener('click', () => {
+      const column = button.dataset.column;
+      neighborsSort.ascending = neighborsSort.column === column
+        ? !neighborsSort.ascending
+        : column !== 'score';
+      neighborsSort.column = column;
+      updateNeighborsTopDroughts(window.neighborsWindowRolls || []);
+    });
+  });
+
   toggleBtn.style.display = entries.length > 10 ? 'inline-block' : 'none';
   toggleBtn.textContent = expanded ? 'Show Top 10' : `Show All ${entries.length}`;
   toggleBtn.onclick = () => {
     toggleBtn.dataset.expanded = expanded ? 'false' : 'true';
     updateNeighborsTopDroughts(window.neighborsWindowRolls || []);
   };
-  container.querySelectorAll('.neighbors-drought-link').forEach(btn => btn.addEventListener('click', () => {
-    document.getElementById('neighborsCenterSelect').value = btn.dataset.center;
-    document.getElementById('neighborsCountSelect').value = btn.dataset.count;
-    updateNeighborsPanel(window.latestRolls || []);
-  }));
+
+  container.querySelectorAll('.neighbors-drought-link').forEach(button => {
+    button.addEventListener('click', () => {
+      document.getElementById('neighborsCenterSelect').value =
+        button.dataset.center;
+      document.getElementById('neighborsCountSelect').value =
+        button.dataset.count;
+      updateNeighborsPanel(window.latestRolls || []);
+    });
+  });
 }
 
 function buildUrgencySnapshot(candidates) {
@@ -1529,6 +1625,7 @@ function buildUrgencySnapshot(candidates) {
   const heatInfo = getNeighborsHeatCounts(rolls, heatWindow);
   renderNeighborsHeatLegend(heatInfo.maxCount, heatInfo.usedWindow, heatMode);
   renderNeighborsRacetrack(numbers, centerNumber, heatInfo.counts, heatInfo.usedWindow, heatInfo.maxCount, heatMode, urgencyHighlightState.numbers);
+  const neighborsSort = { column: 'score', ascending: false };
   updateNeighborsTopDroughts(window.neighborsWindowRolls || []);
 
   const row = document.getElementById('neighborsStatsRow');
