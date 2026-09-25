@@ -2012,9 +2012,9 @@ async function fetchProfitCompare() {
 function getWindowMetric(row, windowName, metric) {
   const win = row?.results_by_window?.[windowName];
 
-  if (!win || win.unavailable) return "—";
+  if (!win || win.unavailable) return null;
 
-  return win?.[metric] ?? "—";
+  return win?.[metric] ?? null;
 }
 
 function formatMoneyish(value) {
@@ -2042,7 +2042,10 @@ function renderProfitCompare(data) {
       <b>Wheel:</b> ${data.wheel_id} |
       <b>Table Limit:</b> ${data.table_limit}
       <div style="margin-top:4px; font-size:12px;">
-        This favors consistency, low drawdown, many entries, and positive results across multiple windows.
+        Historical, in-sample comparison: thresholds are chosen using the same rolls being tested.
+        The 500 and 2500 windows overlap with All; their profitability counts are not independent trials.
+        Drawdown includes interim losing spins. Table Safe checks the configured single-bet limit, while Bank Roll Needed shows cumulative stake.
+        Flash simulations use base payouts and exclude unrecorded bonuses.
       </div>
     </div>
 
@@ -2099,9 +2102,9 @@ function renderProfitCompare(data) {
               <td>${r.all_db_threshold ?? "—"}</td>
               <td>${r.all_db_max_delay ?? "—"}</td>
               <td>${r.all_db_worst_wait ?? "—"}</td>
-              <td>${getWindowMetric(r, "all", "progression_multiplier") ?? "—"}x</td>
+              <td>${getWindowMetric(r, "all", "progression_multiplier") == null ? "—" : `${getWindowMetric(r, "all", "progression_multiplier")}x`}</td>
               <td>${getWindowMetric(r, "all", "max_progression_bet") ?? "—"}</td>
-              <td>${getWindowMetric(r, "all", "historical_worst_case_table_safe") ? "✅" : "❌"}</td>
+              <td>${getWindowMetric(r, "all", "historical_worst_case_table_safe") == null ? "—" : getWindowMetric(r, "all", "historical_worst_case_table_safe") ? "✅" : "❌"}</td>
               <td>${r.all_db_risk_required ?? "—"}</td>
               <td>${r.all_db_safety_margin ?? "—"}</td>
               <td>${r.windows_profitable}/${r.windows_tested}</td>
@@ -2133,7 +2136,7 @@ function renderProfitCompare(data) {
                 ${r.all_db_profit_per_hour ?? "—"}
               </td>
               <td>${formatMoneyish(r.all_db_net_profit)}</td>
-              <td>${getWindowMetric(r, "all", "roi")}%</td>
+              <td>${getWindowMetric(r, "all", "roi") == null ? "—" : `${getWindowMetric(r, "all", "roi")}%`}</td>
               <td>${r.all_db_avg_stake ?? "—"}</td>
               <td>${r.all_db_max_stake ?? "—"}</td>
               <td>
@@ -2144,7 +2147,7 @@ function renderProfitCompare(data) {
                 }
               </td>
               <td>${formatMoneyish(getWindowMetric(r, "all", "max_drawdown"))}</td>
-              <td>${getWindowMetric(r, "all", "longest_loss_streak")}</td>
+              <td>${getWindowMetric(r, "all", "longest_loss_streak") ?? "—"}</td>
               <td>${r.all_db_profit_per_hour ?? "—"}</td>
               <td>${r.all_db_entries_per_hour ?? "—"}</td>
               <td>${r.all_db_minutes_between_entries ?? "—"}</td>

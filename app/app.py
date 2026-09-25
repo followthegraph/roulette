@@ -1000,6 +1000,47 @@ FRENCH_BETS = {
     }
 }
 
+def calculate_composite_hit_profit(strategy, hit_number, chip_multiplier=1, unit=1):
+    """Net on the winning spin for two separately placed even-money-layout chips."""
+    name = str(strategy or "").lstrip("'").strip()
+    groups = None
+    odds = 2  # Dozens and columns/rows pay 2:1.
+
+    dozens = [set(range(start, start + 12)) for start in (1, 13, 25)]
+    rows = [set(range(start, 37, 3)) for start in (3, 2, 1)]
+    dozen_pairs = {
+        "1st & 2nd & 12": (0, 1), "1st & 3rd & 12": (0, 2),
+        "2nd & 3rd & 12": (1, 2),
+    }
+    row_pairs = {
+        "Top & Middle Row": (0, 1), "Top & Bottom Row": (0, 2),
+        "Middle & Bottom Row": (1, 2),
+    }
+
+    if name in dozen_pairs:
+        groups = [dozens[i] for i in dozen_pairs[name]]
+    elif name in row_pairs:
+        groups = [rows[i] for i in row_pairs[name]]
+    elif name.lower().startswith("crossfire,"):
+        parts = name.lower().split(",", 1)[1].strip().split(" & ")
+        if len(parts) == 2:
+            dozen_index = {"1st": 0, "2nd": 1, "3rd": 2}.get(parts[0])
+            row_index = {"top": 0, "middle": 1, "bottom": 2}.get(parts[1])
+            if dozen_index is not None and row_index is not None:
+                groups = [dozens[dozen_index], rows[row_index]]
+    elif name.startswith("Adj Street,"):
+        coverage = get_strategy_numbers(name) or []
+        if len(coverage) == 6:
+            groups = [set(coverage[:3]), set(coverage[3:])]
+            odds = 11
+
+    if groups is None:
+        return None
+
+    chip = chip_multiplier * unit
+    gross_return = sum((odds + 1) * chip for group in groups if hit_number in group)
+    return gross_return - len(groups) * chip
+
 def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1, max_steps=8, table_limit=2000):
     numbers = get_strategy_numbers(strategy)
 
@@ -1067,68 +1108,70 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
         delay = hit_events[event_index]["index"] - hit_events[event_index - 1]["index"]
         hit_number = hit_events[event_index]["number"]
 
-        if delay < threshold:
+        # Entry is observable after the threshold spin has already completed.
+        # The first actionable wager is on the following spin.
+        if delay <= threshold:
             continue
 
-        wait_after_entry = delay - threshold
+        wait_after_entry = delay - threshold - 1
 
-        if wait_after_entry < max_steps:
+        attempts = min(wait_after_entry + 1, max_steps)
+        stakes = [base_units * (progression_multiplier ** i) * unit for i in range(attempts)]
+        affordable = [stake for stake in stakes if stake <= table_limit]
+        if len(affordable) != len(stakes):
+            stakes = affordable
+            stopped_at_limit = True
+        else:
+            stopped_at_limit = False
+
+        # Drawdown includes every interim losing spin, including a sequence
+        # that eventually recovers on its final hit.
+        for loss_stake in stakes[:-1] if not stopped_at_limit and wait_after_entry < max_steps else stakes:
+            interim_bankroll = bankroll - loss_stake
+            max_drawdown = min(max_drawdown, interim_bankroll - peak)
+            bankroll = interim_bankroll
+
+        trade_staked = sum(stakes)
+        total_stake_events += len(stakes)
+        total_stake_amount += trade_staked
+        if stakes:
+            max_stake_reached = max(max_stake_reached, max(stakes))
+
+        if stopped_at_limit:
+            profit = -trade_staked
+            outcome = "table_limit_loss"
+            step = len(stakes)
+        elif wait_after_entry < max_steps:
             step = wait_after_entry
             stake_units = base_units * (progression_multiplier ** step)
-            max_stake_reached = max(max_stake_reached, stake_units)
-            total_stake_events += 1
-            total_stake_amount += stake_units
+            prior_losses = sum(stakes[:-1])
+            french_profit = calculate_french_hit_profit(
+                strategy, hit_number,
+                progression_multiplier=(progression_multiplier ** step),
+                unit=unit, wheel_id=wheel_id
+            )
+            composite_profit = calculate_composite_hit_profit(
+                strategy, hit_number,
+                chip_multiplier=(progression_multiplier ** step), unit=unit
+            )
 
-            if stake_units * unit > table_limit:
-                trade_staked = table_limit
-                profit = -table_limit
-                outcome = "table_limit_loss"
+            if french_profit is not None:
+                hit_profit = french_profit
+            elif composite_profit is not None:
+                hit_profit = composite_profit
             else:
-                if progression_multiplier == 1:
-                    total_prior_loss_units = base_units * step
-                else:
-                    total_prior_loss_units = base_units * (
-                        (progression_multiplier ** step - 1)
-                        / (progression_multiplier - 1)
-                    )
-                if progression_multiplier == 1:
-                    trade_staked = base_units * (step + 1) * unit
-                else:
-                    trade_staked = base_units * (
-                        (progression_multiplier ** (step + 1) - 1)
-                        / (progression_multiplier - 1)
-                    ) * unit
+                hit_profit = stake_units * net_profit_per_unit * unit
 
-                french_profit = calculate_french_hit_profit(
-                    strategy,
-                    hit_number,
-                    progression_multiplier=(progression_multiplier ** step),
-                    unit=unit
-                )
-
-                if french_profit is not None:
-                    profit = french_profit - total_prior_loss_units * unit
-                else:
-                    profit = (
-                        stake_units * net_profit_per_unit * unit
-                        - total_prior_loss_units * unit
-                    )
-
-                outcome = "win"
+            profit = hit_profit - prior_losses
+            # Interim losses were applied above; add only the winning spin.
+            bankroll += hit_profit
+            outcome = "win"
         else:
             step = max_steps
-            if progression_multiplier == 1:
-                raw_loss = base_units * max_steps * unit
-            else:
-                raw_loss = base_units * (
-                    (progression_multiplier ** max_steps - 1)
-                    / (progression_multiplier - 1)
-                ) * unit
-            trade_staked = min(raw_loss, table_limit)
             profit = -trade_staked
             outcome = "loss"
 
-        bankroll += profit
+        # For a win, bankroll already includes every interim loss and hit.
         peak = max(peak, bankroll)
         max_drawdown = min(max_drawdown, bankroll - peak)
 
@@ -1185,22 +1228,15 @@ def run_profit_simulation(wheel_id, strategy, window="2500", entry="P95", unit=1
 
     max_delay = max(delays) if delays else None
 
-    worst_wait_after_entry = max(
-        0,
-        (max_delay or 0) - (threshold or 0)
+    worst_wait_after_entry = max(0, (max_delay or 0) - (threshold or 0) - 1)
+    attempted_steps = min(max_steps, worst_wait_after_entry + 1) if max_delay and max_delay > threshold else 0
+    historical_risk_required = round(
+        sum(base_units * (progression_multiplier ** i) * unit for i in range(attempted_steps)), 2
     )
-
-    if worst_wait_after_entry > 0:
-        historical_risk_required = base_units * (
-            (progression_multiplier ** (worst_wait_after_entry + 1) - 1)
-            / (progression_multiplier - 1)
-        )
-    else:
-        historical_risk_required = 0
-
-    historical_risk_required = round(historical_risk_required * unit, 2)
-
-    max_progression_bet = base_units * (progression_multiplier ** worst_wait_after_entry) * unit
+    max_progression_bet = (
+        base_units * (progression_multiplier ** (attempted_steps - 1)) * unit
+        if attempted_steps else 0
+    )
 
     historical_worst_case_table_safe = (
         max_progression_bet <= table_limit
@@ -1308,7 +1344,7 @@ def calculate_bot_readiness(result):
 
 def conservative_bot_verdict(result, windows_profitable, windows_tested):
     if not result:
-        return "No data"
+        return "No qualifying all-data result"
 
     roi = result.get("roi") or 0
     entries = result.get("total_entries") or 0
@@ -1337,17 +1373,17 @@ def conservative_bot_verdict(result, windows_profitable, windows_tested):
         return f"High risk ({risk_label})"
 
     if losses == 0 and win_rate >= 99 and roi >= 10:
-        return f"Conservative grinder ({risk_label})"
+        return f"No recorded completed losses, in-sample ({risk_label})"
 
     if win_rate >= 95 and roi >= 8 and drawdown < 1000:
-        return f"Strong conservative candidate ({risk_label})"
+        return f"Positive in-sample result ({risk_label})"
 
     if roi < 5:
         return f"Low efficiency ({risk_label})"
 
     return f"Watchlist ({risk_label})"
 
-def calculate_french_hit_profit(strategy, hit_number, progression_multiplier=1, unit=1):
+def calculate_french_hit_profit(strategy, hit_number, progression_multiplier=1, unit=1, wheel_id=None):
     config = FRENCH_BETS.get(strategy)
     if not config:
         return None
@@ -1357,10 +1393,14 @@ def calculate_french_hit_profit(strategy, hit_number, progression_multiplier=1, 
 
     for bet in config["bets"]:
         if int(hit_number) in bet["numbers"]:
+            net_odds = (
+                29 if wheel_id == "flash-wheel" and bet["type"] == "straight"
+                else bet["payout"]
+            )
             gross_win += (
                 bet["chips"]
                 * progression_multiplier
-                * bet["payout"]
+                * (net_odds + 1)
                 * unit
             )
 
@@ -1643,16 +1683,11 @@ def profit_compare():
                 "all_db_max_stake": all_db_result.get("max_stake_reached"),
                 "all_db_capital_efficiency": all_db_result.get("capital_efficiency"),
                 "all_db_max_delay": all_db_result.get("delay_max") or all_db_result.get("max_delay"),
-                "all_db_worst_wait_after_entry": (
-                    (all_db_result.get("delay_max") or all_db_result.get("max_delay") or 0)
-                    - (all_db_result.get("threshold") or 0)
-                ),
+                "all_db_worst_wait_after_entry": all_db_result.get("worst_wait_after_entry"),
                 "all_db_safety_margin": (
                     (all_db_result.get("max_steps") or 0)
-                    - max(0, (
-                        (all_db_result.get("delay_max") or all_db_result.get("max_delay") or 0)
-                        - (all_db_result.get("threshold") or 0)
-                    ))
+                    - (all_db_result.get("worst_wait_after_entry") or 0) - 1
+                    if all_db_result else None
                 ),
                 "all_db_max_delay": all_db_result.get("max_delay"),
                 "all_db_worst_wait": all_db_result.get("worst_wait_after_entry"),
