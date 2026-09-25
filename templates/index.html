@@ -1052,6 +1052,8 @@ function neighborRiskClass(stats) {
   return risk >= threshold * .75 ? 'risk-near' : 'risk-ok';
 }
 
+const neighborsSort = { column: 'score', ascending: false };
+
 function updateNeighborsTopDroughts(rolls) {
   const container = document.getElementById('neighborsTopDroughts');
   const header = document.getElementById('neighborsLocatorHeader');
@@ -1659,7 +1661,6 @@ function buildUrgencySnapshot(candidates) {
   const heatInfo = getNeighborsHeatCounts(rolls, heatWindow);
   renderNeighborsHeatLegend(heatInfo.maxCount, heatInfo.usedWindow, heatMode);
   renderNeighborsRacetrack(numbers, centerNumber, heatInfo.counts, heatInfo.usedWindow, heatInfo.maxCount, heatMode, urgencyHighlightState.numbers);
-  const neighborsSort = { column: 'score', ascending: false };
   updateNeighborsTopDroughts(window.neighborsWindowRolls || []);
 
   const row = document.getElementById('neighborsStatsRow');
