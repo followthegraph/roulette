@@ -82,27 +82,27 @@
     },
     "1st & 2nd & 12": {
       "base_stake": 2,
-      "progression": "double"
+      "progression": "triple"
     },
     "1st & 3rd & 12": {
       "base_stake": 2,
-      "progression": "double"
+      "progression": "triple"
     },
     "2nd & 3rd & 12": {
       "base_stake": 2,
-      "progression": "double"
+      "progression": "triple"
     },
     "Top & Middle Row": {
       "base_stake": 2,
-      "progression": "double"
+      "progression": "triple"
     },
     "Top & Bottom Row": {
       "base_stake": 2,
-      "progression": "double"
+      "progression": "triple"
     },
     "Middle & Bottom Row": {
       "base_stake": 2,
-      "progression": "double"
+      "progression": "triple"
     }
   },
   "adjusted_rolls": {

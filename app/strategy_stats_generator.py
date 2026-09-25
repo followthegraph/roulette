@@ -40,12 +40,12 @@ DEFAULT_MARTINGALE_CONFIG = {
         "Crossfire, 3rd & middle": {"base_stake": 2, "progression": "triple"},
         "Crossfire, 3rd & bottom": {"base_stake": 2, "progression": "triple"},
 
-        "1st & 2nd & 12": {"base_stake": 2, "progression": "double"},
-        "1st & 3rd & 12": {"base_stake": 2, "progression": "double"},
-        "2nd & 3rd & 12": {"base_stake": 2, "progression": "double"},
-        "Top & Middle Row": {"base_stake": 2, "progression": "double"},
-        "Top & Bottom Row": {"base_stake": 2, "progression": "double"},
-        "Middle & Bottom Row": {"base_stake": 2, "progression": "double"},
+        "1st & 2nd & 12": {"base_stake": 2, "progression": "triple"},
+        "1st & 3rd & 12": {"base_stake": 2, "progression": "triple"},
+        "2nd & 3rd & 12": {"base_stake": 2, "progression": "triple"},
+        "Top & Middle Row": {"base_stake": 2, "progression": "triple"},
+        "Top & Bottom Row": {"base_stake": 2, "progression": "triple"},
+        "Middle & Bottom Row": {"base_stake": 2, "progression": "triple"},
             
         "Adj Street, 1st & 2nd": {"base_stake": 2, "progression": "double"},
         "Adj Street, 2nd & 3rd": {"base_stake": 2, "progression": "double"},
@@ -206,6 +206,8 @@ def generate_strategy_stats(
     skip_high_risk = 0
     skip_too_far = 0
 
+    if martingale_config_path == "martingale_config.json":
+        martingale_config_path = os.path.join(os.path.dirname(__file__), martingale_config_path)
     martingale_config = load_martingale_config(martingale_config_path)
 
     with open(input_json_path, "r", encoding="utf-8") as f:

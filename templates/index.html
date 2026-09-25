@@ -3576,7 +3576,15 @@ async function saveUrgencySnapshot(dataRows) {
 function getStoredRiskModeForStrategy(rawName) {
   const key = `riskPref_${rawName}`;
   const stored = localStorage.getItem(key);
-  return stored === 'triple' ? 'triple' : 'double';
+  if (stored === 'triple' || stored === 'double') return stored;
+
+  // Match urgency details to the progression used by the risk table.
+  const normalized = normalizeStrategyName(rawName);
+  const row = allData.find(entry =>
+    normalizeStrategyName(entry['Betting Strategy']) === normalized
+  );
+  return String(row?.['Martingale Progression'] || '').toLowerCase() === 'triple'
+    ? 'triple' : 'double';
 }
 
 function calculateProgressiveRisk(steps, mode) {

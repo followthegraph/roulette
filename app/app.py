@@ -298,7 +298,11 @@ def get_base_units_for_strategy(strategy):
 def get_progression_multiplier_for_strategy(strategy):
     s = str(strategy or "").lstrip("'").strip().lower()
 
-    if s.startswith("crossfire,"):
+    paired_rows_and_dozens = {
+        "1st & 2nd & 12", "1st & 3rd & 12", "2nd & 3rd & 12",
+        "top & middle row", "top & bottom row", "middle & bottom row",
+    }
+    if s.startswith("crossfire,") or s in paired_rows_and_dozens:
         return 3
 
     return 2
