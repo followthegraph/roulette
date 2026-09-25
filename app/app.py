@@ -29,6 +29,7 @@ STATS_CSV = DATA_DIR / "strategy_statistics_output.csv"
 STATS_ALL_CSV = DATA_DIR / "strategy_statistics_output_all.csv"
 ROULETTE_JSON = DATA_DIR / "roulette_data.json"
 ROULETTE_ALL_JSON = DATA_DIR / "roulette_data_all.json"
+EU_PREVIEW_JSON = DATA_DIR / "eu_preview_rolls.json"
 CONFIG_PATH = ROOT_DIR / "config" / "config.local.json"
 ENV_PATH = ROOT_DIR / ".env"
 GLOBAL_DB_PATH = ROOT_DIR / "global" / "global_rolls.sqlite"
@@ -453,6 +454,17 @@ def get_latest_valid_cohort(wheel_id):
 def get_global_rolls_for_stats(wheel_id, window="500"):
     window = str(window).lower()
 
+    if wheel_id == "eu-preview":
+        rolls = json_read(EU_PREVIEW_JSON) if EU_PREVIEW_JSON.exists() else []
+        if not isinstance(rolls, list):
+            return []
+        if window == "all":
+            return rolls
+        try:
+            return rolls[:max(1, int(window))]
+        except ValueError:
+            return rolls[:500]
+
     # Local preview can use the saved rolls when the global cohort database
     # has not been copied to the development machine.
     if wheel_id == "local-dev":
@@ -726,11 +738,46 @@ def stats():
 
 @app.route("/roulette_data.json")
 def get_roulette_data():
+    if request.args.get("wheel_id") == "eu-preview":
+        return jsonify(get_global_rolls_for_stats("eu-preview", "50"))
     if not ROULETTE_JSON.exists():
         return jsonify([])
 
     data = json_read(ROULETTE_JSON)
     return jsonify(data)
+
+@app.route("/dev-eu-preview-sync", methods=["POST"])
+def dev_eu_preview_sync():
+    # A development-only, fixed-source import. Never overwrite local scraper data.
+    if (WHEEL_ID != "local-dev" or request.host.split(":")[0] not in
+            ("localhost", "127.0.0.1", "[::1]", "::1") or not session.get("authed")):
+        return jsonify({"ok": False, "error": "Available only on authenticated localhost dev"}), 403
+    initial = not EU_PREVIEW_JSON.exists()
+    try:
+        incoming = []
+        for chosen_window in (("all", "500") if initial else ("500",)):
+            response = HTTP_SESSION.get(
+                "https://eu.getdatbp.com/neighbors-rolls.json",
+                params={"wheel_id": "eu-wheel", "window": chosen_window},
+                timeout=12,
+            )
+            response.raise_for_status()
+            incoming = response.json()
+            if incoming:
+                break
+        if not isinstance(incoming, list) or not incoming or any(
+                not isinstance(r, dict) or not isinstance(r.get("seq"), int)
+                or not isinstance(r.get("number"), int) for r in incoming):
+            return jsonify({"ok": False, "error": "EU sent no usable sequenced rolls"}), 502
+        with DATA_LOCK:
+            existing = json_read(EU_PREVIEW_JSON) if EU_PREVIEW_JSON.exists() else []
+            by_seq = {r["seq"]: r for r in existing if isinstance(r, dict) and isinstance(r.get("seq"), int)}
+            by_seq.update({r["seq"]: r for r in incoming})
+            combined = sorted(by_seq.values(), key=lambda r: r["seq"], reverse=True)
+            json_write(EU_PREVIEW_JSON, combined)
+        return jsonify({"ok": True, "roll_count": len(combined), "latest_seq": combined[0]["seq"]})
+    except (requests.RequestException, ValueError, TypeError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
 
 @app.route("/neighbors-rolls.json")
 def neighbors_rolls():

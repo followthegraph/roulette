@@ -169,7 +169,14 @@
 
     <div
       style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px;"></div>
-    <div id="coldestTicker" class="ticker" style="margin-bottom: 20px;"></div>
+    <div style="margin-bottom:6px"><label for="coldestCount">Coldest numbers to show</label>
+      <input id="coldestCount" type="number" min="1" max="37" value="12" style="width:65px" oninput="renderHitFrequency(window.latestRolls || [])"></div>
+    <div id="euPreviewControls" style="display:none;margin:6px 0;font-size:13px">
+      <button type="button" id="euPreviewToggle">Follow EU data</button>
+      <span id="euPreviewStatus" role="status"></span>
+    </div>
+    <div id="coldestTicker" class="ticker" style="margin-bottom: 6px;"></div>
+    <div id="coldestBetMatches" style="margin-bottom:20px;font-size:13px"></div>
 
     <div id="streetStickyWrap">
       <div class="street-compact-header">
@@ -329,7 +336,7 @@
         style="margin-bottom: 12px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff;">
         <div id="neighborsLocatorHeader"
           style="font-weight: bold; margin-bottom: 8px;">Top Neighbors Opportunities</div>
-        <div style="font-size: 12px; margin-bottom: 8px;">Ranked by Bet Signal score. Average and maximum delay use the selected Stats Window. Blue values use the count after excluding zeros and consecutive repeats; black values in parentheses are raw.</div>
+        <div style="font-size: 12px; margin-bottom: 8px;">Ranked by Bet Signal score. Average and maximum delay use the selected Stats Window. Blue values exclude zeros and consecutive repeats; black values in parentheses are raw. Recovery reads: max progress · wagers until that max → net on hit · last profitable, affordable step. Click a recovery value for details.</div>
         <div class="neighbors-controls">
           <label for="neighborsWidthFilter">Neighbors on each side</label>
           <select id="neighborsWidthFilter">
@@ -346,6 +353,7 @@
           </select>
           <button type="button" id="neighborsShowAllToggle" style="display:none">Show All</button>
           <button type="button" id="neighborsResetView">Reset view</button>
+          <label><input type="checkbox" id="neighborsRecoveryFilter" checked> Show only rows recoverable at historical max (or with a profitable next wager beyond max)</label>
         </div>
         <div id="neighborsTopDroughts">—</div>
       </div>
@@ -523,6 +531,7 @@
 
 // One browser-local tracked strategy. No bets are submitted to the casino.
 const TRACK_KEY = 'roulette_single_bet_v1';
+const wheelTrackKey = () => `${TRACK_KEY}_${getCurrentWheelId()}`;
 const BANKROLL_KEY = `roulette_bankroll_v1_${getCurrentWheelId()}`;
 let manualBankroll = (() => {
   try { const raw = localStorage.getItem(BANKROLL_KEY); const value = Number(raw); return raw !== null && Number.isFinite(value) && value >= 0 ? value : null; }
@@ -531,13 +540,15 @@ let manualBankroll = (() => {
 const neighborsSort = { column: 'score', ascending: false };
 let trackedBet = (() => {
   try {
-    const saved = JSON.parse(localStorage.getItem(TRACK_KEY));
+    const saved = JSON.parse(localStorage.getItem(wheelTrackKey()) || localStorage.getItem(TRACK_KEY));
     return saved && saved.wheel === getCurrentWheelId() ? saved : null;
   } catch (_) { return null; }
 })();
 function saveTrackedBet() {
-  try { if (trackedBet) localStorage.setItem(TRACK_KEY, JSON.stringify(trackedBet));
-        else localStorage.removeItem(TRACK_KEY);
+  try { if (trackedBet) localStorage.setItem(wheelTrackKey(), JSON.stringify(trackedBet));
+        else localStorage.removeItem(wheelTrackKey());
+        const legacy = JSON.parse(localStorage.getItem(TRACK_KEY) || 'null');
+        if (legacy?.wheel === getCurrentWheelId()) localStorage.removeItem(TRACK_KEY);
         if (manualBankroll !== null) localStorage.setItem(BANKROLL_KEY, String(manualBankroll));
         else localStorage.removeItem(BANKROLL_KEY); }
   catch (error) { console.warn('Bet tracking storage unavailable:', error); }
@@ -559,6 +570,7 @@ function bindBankrollField(panel) {
     manualBankroll = text ? value : null;
     if (trackedBet) trackedBet.bankrollBase = manualBankroll === null ? null : manualBankroll - trackedBet.total;
     saveTrackedBet();
+    updateNeighborsTopDroughts(window.neighborsWindowRolls || []);
   });
 }
 function moneyTrack(value) {
@@ -1291,13 +1303,80 @@ function neighborRiskClass(stats) {
   return risk >= threshold * .75 ? 'risk-near' : 'risk-ok';
 }
 
+function neighborRecovery(count, wheelId = getCurrentWheelId()) {
+  const numbers = 2 * count + 1;
+  const bankroll = trackedBet?.wheel === wheelId && trackedBet.bankrollBase != null
+    ? trackedBet.bankrollBase + trackedBet.total : manualBankroll;
+  const limitInput = Number(document.getElementById('profitTableLimit')?.value);
+  const tableLimit = Number.isFinite(limitInput) && limitInput > 0 ? limitInput : 2000;
+  const returnPerChip = wheelId === 'flash-wheel' ? 30 : 36;
+  let lastStep = 0;
+  let stopReason = 'calculation cap';
+  for (let step = 1; step <= 30; step++) {
+    const chip = 2 ** (step - 1);
+    const total = numbers * (2 ** step - 1);
+    if (returnPerChip * chip - total <= 0) { stopReason = 'next win would lose money'; break; }
+    if (numbers * chip > tableLimit) { stopReason = 'configured total bet limit'; break; }
+    if (wheelId === 'flash-wheel' && chip > 50) { stopReason = 'Flash $50 per-number limit'; break; }
+    if (bankroll != null && total > bankroll) { stopReason = 'bankroll'; break; }
+    lastStep = step;
+  }
+  const required = numbers * (2 ** lastStep - 1);
+  return {lastStep, required, bankroll, stopReason, returnPerChip};
+}
+
+function neighborRecoveryHtml(entry) {
+  const {lastStep, required, stopReason, returnPerChip} = entry.recovery;
+  const raw = Number(entry.stats.rollsSince);
+  const historicalMax = Number(entry.stats.maxDelay);
+  const hasMax = entry.stats.maxDelay !== '' && Number.isFinite(historicalMax) && historicalMax > 0;
+  const progress = hasMax ? `${Math.round(100 * raw / historicalMax)}% max` : 'No max';
+  const limit = lastStep ? `≤${lastStep} steps` : 'No wager';
+  const capacity = lastStep
+    ? `${lastStep} profitable, affordable steps from a new entry. $${required.toLocaleString()} total to place all ${lastStep} wagers at $1 per number. The next step is blocked by ${stopReason}. Base hit return is ${returnPerChip}× one chip.`
+    : `No profitable, affordable first wager: ${stopReason}.`;
+  const detail = (summary, explanation) => `<details class="neighbor-recovery-details"><summary style="cursor:pointer;white-space:nowrap">${summary}</summary><div style="max-width:270px;white-space:normal;font-size:12px;padding:4px 0">${explanation} ${capacity}</div></details>`;
+  if (!lastStep) return detail(`${progress} · ${limit}`, capacity);
+  if (!hasMax) return detail(`${progress} · ${limit}`, 'There are not enough completed hit intervals to calculate a historical maximum.');
+  if (raw >= historicalMax) {
+    const beyond = raw - historicalMax;
+    return detail(`${progress} · ${limit}`, `${beyond} raw spins beyond the historical maximum. A new entry can still run up to ${lastStep} profitable, affordable steps.`);
+  }
+  const stepsToMax = historicalMax - raw;
+  if (stepsToMax > lastStep) {
+    const theoretical = stepsToMax <= 30
+      ? returnPerChip * 2 ** (stepsToMax - 1) - (2 * entry.count + 1) * (2 ** stepsToMax - 1)
+      : null;
+    const netLabel = theoretical === null ? '' : ` Theoretical net on a hit at that delay: ${theoretical < 0 ? '-' : '+'}$${Math.abs(theoretical).toLocaleString()}.`;
+    return detail(`${progress} · ${stepsToMax}→out · ${limit}`, `${stepsToMax} wagers until the historical maximum; the progression cannot reach it within the profitable, affordable limit.${netLabel}`);
+  }
+  const netAtMax = returnPerChip * 2 ** (stepsToMax - 1) -
+    (2 * entry.count + 1) * (2 ** stepsToMax - 1);
+  const result = `${netAtMax < 0 ? '-' : '+'}$${Math.abs(netAtMax).toLocaleString()}`;
+  return detail(`${progress} · ${stepsToMax}→${result} · ${limit}`, `${stepsToMax} wagers until the historical maximum; ${result} net if the hit occurs on the last one, after subtracting every wager in this sequence.`);
+}
+
+function neighborRecoverableToMax(entry) {
+  if (entry.recovery.lastStep < 1) return false;
+  const historicalMax = Number(entry.stats.maxDelay);
+  if (entry.stats.maxDelay === '' || !Number.isFinite(historicalMax)) return true;
+  const stepsToMax = historicalMax - Number(entry.stats.rollsSince);
+  return stepsToMax <= 0 || stepsToMax <= entry.recovery.lastStep;
+}
+
 function updateNeighborsTopDroughts(rolls) {
   const container = document.getElementById('neighborsTopDroughts');
   const header = document.getElementById('neighborsLocatorHeader');
   const toggleBtn = document.getElementById('neighborsShowAllToggle');
   const widthSelect = document.getElementById('neighborsWidthFilter');
   const resetBtn = document.getElementById('neighborsResetView');
-  if (!container || !header || !toggleBtn || !widthSelect || !resetBtn) return;
+  const recoveryFilter = document.getElementById('neighborsRecoveryFilter');
+  if (!container || !header || !toggleBtn || !widthSelect || !resetBtn || !recoveryFilter) return;
+
+  recoveryFilter.onchange = () => {
+    toggleBtn.dataset.expanded = 'false';
+    updateNeighborsTopDroughts(window.neighborsWindowRolls || []);
+  };
 
   widthSelect.onchange = () => {
     toggleBtn.dataset.expanded = 'false';
@@ -1306,6 +1385,7 @@ function updateNeighborsTopDroughts(rolls) {
 
   resetBtn.onclick = () => {
     widthSelect.value = 'all';
+    recoveryFilter.checked = false;
     neighborsSort.column = 'score';
     neighborsSort.ascending = false;
     toggleBtn.dataset.expanded = 'false';
@@ -1331,14 +1411,17 @@ function updateNeighborsTopDroughts(rolls) {
       if (stats.rollsSince === '') continue;
 
       const scoreInfo = flashNeighborScore(stats, count);
-      entries.push({ center, count, stats, scoreInfo });
+      entries.push({ center, count, stats, scoreInfo, recovery: neighborRecovery(count) });
     }
   }
 
   const selectedWidth = widthSelect.value;
-  const filteredEntries = selectedWidth === 'all'
+  const widthEntries = selectedWidth === 'all'
     ? entries
     : entries.filter(entry => entry.count === Number(selectedWidth));
+  const filteredEntries = recoveryFilter.checked
+    ? widthEntries.filter(neighborRecoverableToMax)
+    : widthEntries;
 
   filteredEntries.sort((a, b) => {
     const value = entry => neighborsSort.column === 'score'
@@ -1389,6 +1472,7 @@ function updateNeighborsTopDroughts(rolls) {
             ${sortHeader('Max Delay', 'maxDelay')}
             ${sortHeader('Bet Signal', 'score')}
             <th>Martingale Risk</th>
+            <th>Max % · steps→net · limit</th>
           </tr>
         </thead>
         <tbody>
@@ -1409,12 +1493,14 @@ function updateNeighborsTopDroughts(rolls) {
                 <span class="progression-badge progression-double">2x</span>
                 ${neighborRiskHtml(entry.stats)}
               </td>
+              <td>${neighborRecoveryHtml(entry)}</td>
             </tr>
           `).join('')}
         </tbody>
       </table>
     </div>`;
 
+  if (!filteredEntries.length) container.querySelector('tbody').innerHTML = '<tr><td colspan="7">No rows match this filter. Uncheck it to see all neighbors bets.</td></tr>';
   container.querySelectorAll('.neighbors-sort').forEach(button => {
     button.addEventListener('click', () => {
       const column = button.dataset.column;
@@ -1475,14 +1561,15 @@ function buildUrgencySnapshot(candidates) {
 
     function getCurrentWheelId() {
         const host = window.location.hostname;
-        if (host === "localhost" || host === "127.0.0.1" || host === "::1") return "local-dev";
+        if (host === "localhost" || host === "127.0.0.1" || host === "::1")
+          return localStorage.getItem('roulette_eu_preview') === 'on' ? 'eu-preview' : 'local-dev';
         if (host.includes("flash")) return "flash-wheel";
         if (host.includes("classic")) return "classic-wheel";
         if (host.includes("eu")) return "eu-wheel";
         return null;
       }
     function getStatsApiBase() {
-      return getCurrentWheelId() === "local-dev" ? "" : "https://eu.getdatbp.com";
+      return ['local-dev', 'eu-preview'].includes(getCurrentWheelId()) ? "" : "https://eu.getdatbp.com";
     }
       function renderHitFrequency(data) {
         const container = document.getElementById("heatmap");
@@ -1587,15 +1674,17 @@ function buildUrgencySnapshot(candidates) {
           }
 
           function updateColdestTicker(lastSeenMap) {
+            const countInput = document.getElementById('coldestCount');
+            const requested = Math.max(1, Math.min(37, Number(countInput?.value) || 12));
             const coldest = Object.entries(lastSeenMap)
               .filter(([_, v]) => v !== null)
               .sort((a, b) => b[1] - a[1])  // Sort by last seen, largest (coldest) first
-              .slice(0, 6)
+              .slice(0, requested)
               .map(([n]) => parseInt(n))
               .sort((a, b) => a - b); // Sort numerically
 
             const ticker = document.getElementById("coldestTicker");
-            ticker.innerHTML = "<b style='color:#333;margin-right:8px;'>❄️ Coldest (Numeric Order):</b>";
+            ticker.innerHTML = `<b style='color:#333;margin-right:8px;'>❄️ Coldest ${coldest.length} (Numeric Order):</b>`;
 
             coldest.forEach(n => {
               const span = document.createElement("div");
@@ -1603,6 +1692,22 @@ function buildUrgencySnapshot(candidates) {
               span.className = numberColorMap[n] || "black";
               ticker.appendChild(span);
             });
+            const matches = document.getElementById('coldestBetMatches');
+            if (matches) {
+              const french = frenchBetNames.filter(name => coldest.length && coldest.every(n => generalBets[name].includes(n)));
+              const neighbors = [];
+              for (let width = 1; width <= 9; width++) {
+                for (const center of wheelOrder) {
+                  const covered = getNeighborsNumbers(center, width);
+                  if (coldest.length && coldest.every(n => covered.includes(n))) {
+                    neighbors.push({name: `${center} ± ${width}`, width, covered: covered.length});
+                }
+              }
+              }
+              neighbors.sort((a, b) => a.covered - b.covered || a.width - b.width);
+              const neighborNames = neighbors.slice(0, 3).map(item => item.name);
+              matches.textContent = `Covers all shown: French: ${french.join(', ') || 'none'} · Neighbors: ${neighborNames.join(', ') || 'none'}${neighbors.length > 3 ? ` (+${neighbors.length - 3} wider choices)` : ''}. Coverage includes other numbers too.`;
+            }
           }
           updateColdestTicker(lastSeenMap);
         }
@@ -2984,7 +3089,7 @@ function sameNumberSet(a, b) {
       const neighborsResponse = await fetch(`${getStatsApiBase()}/neighbors-rolls.json?wheel_id=${encodeURIComponent(wheelId)}&window=${encodeURIComponent(statsWindow)}&t=${timestamp}`);
       window.neighborsWindowRolls = neighborsResponse.ok ? await neighborsResponse.json() : [];
 
-      const rolls = await fetch(`/roulette_data.json?t=${timestamp}`).then(r => r.json());
+      const rolls = await fetch(`/roulette_data.json?wheel_id=${encodeURIComponent(wheelId)}&t=${timestamp}`).then(r => r.json());
       window.latestRolls = rolls;
       updateTrackedBet(rolls);
 
@@ -4560,6 +4665,46 @@ document.getElementById("profitSimClose")?.addEventListener("click", () => {
 document.getElementById("runProfitRankBtn")?.addEventListener("click", runProfitRank);
 
 document.getElementById("runProfitCompareBtn")?.addEventListener("click", runProfitCompare);
+document.getElementById("profitTableLimit")?.addEventListener("change", () => {
+  updateNeighborsTopDroughts(window.neighborsWindowRolls || []);
+});
+let euPreviewSyncing = false;
+async function syncEuPreview() {
+  if (euPreviewSyncing) return false;
+  euPreviewSyncing = true;
+  const status = document.getElementById('euPreviewStatus');
+  status.textContent = 'Updating EU rolls…';
+  try {
+    const response = await fetch('/dev-eu-preview-sync', {method: 'POST'});
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || 'Import failed');
+    status.textContent = `EU preview · ${result.roll_count.toLocaleString()} rolls · updated ${new Date().toLocaleTimeString()}`;
+    return true;
+  } catch (error) {
+    status.textContent = `EU update failed: ${error.message}`;
+    return false;
+  } finally { euPreviewSyncing = false; }
+}
+function updateEuPreviewButton() {
+  document.getElementById('euPreviewToggle').textContent = getCurrentWheelId() === 'eu-preview'
+    ? 'Use local data' : 'Follow EU data';
+}
+const isLocalDashboard = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+if (isLocalDashboard) {
+  document.getElementById('euPreviewControls').style.display = '';
+  updateEuPreviewButton();
+  document.getElementById('euPreviewToggle').addEventListener('click', async () => {
+    if (getCurrentWheelId() === 'eu-preview') {
+      localStorage.removeItem('roulette_eu_preview');
+      document.getElementById('euPreviewStatus').textContent = 'Showing local scraper data';
+    } else {
+      if (!(await syncEuPreview())) return;
+      localStorage.setItem('roulette_eu_preview', 'on');
+    }
+    updateEuPreviewButton();
+    window.location.reload();
+  });
+}
 // ===============================
 // Startup / initialization LAST
 // ===============================
@@ -4578,7 +4723,13 @@ document.getElementById("strategyConfigClose")?.addEventListener("click", () => 
 setInterval(updateLastWriteAges, 1000);
 
 refreshGlobalMonitor();
-fetchData();
+if (isLocalDashboard && getCurrentWheelId() === 'eu-preview') {
+  syncEuPreview().finally(fetchData);
+} else fetchData();
+
+setInterval(async () => {
+  if (isLocalDashboard && getCurrentWheelId() === 'eu-preview' && await syncEuPreview()) fetchData();
+}, 30000);
 
 setInterval(() => {
   console.log("🔄 Auto-refreshing dashboard data...");
